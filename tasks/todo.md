@@ -40,7 +40,7 @@
 |---------|------------------------------------|---------------|
 | M5-T1   | OKX Market API client              | done          |
 | M5-T2   | GET /api/market/:token proxy       | done          |
-| M5-T3   | Market data in UI                  | pending       |
+| M5-T3   | Market data in UI                  | done          |
 
 ## M6: OpenClaw Skill + Docs
 
@@ -53,6 +53,6 @@
 
 | Task ID | Description                        | Commit Status |
 |---------|------------------------------------|---------------|
-| M7-T1   | Environment + Vercel config        | pending       |
-| M7-T2   | End-to-end smoke test              | pending       |
-| M7-T3   | Final polish                       | pending       |
+| M7-T1   | Environment + Vercel config        | done          |
+| M7-T2   | End-to-end smoke test              | done          |
+| M7-T3   | Final polish                       | done          |
