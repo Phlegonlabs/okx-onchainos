@@ -12,11 +12,12 @@ export default async function ProviderDashboard({
   params: Promise<{ address: string }>;
 }) {
   const { address } = await params;
+  const normalizedAddress = address.toLowerCase();
 
   const balance = await db
     .select()
     .from(providerBalances)
-    .where(eq(providerBalances.providerAddress, address))
+    .where(eq(providerBalances.providerAddress, normalizedAddress))
     .get();
 
   if (!balance) notFound();
@@ -24,7 +25,7 @@ export default async function ProviderDashboard({
   const providerStrategies = await db
     .select()
     .from(strategies)
-    .where(eq(strategies.providerAddress, address));
+    .where(eq(strategies.providerAddress, normalizedAddress));
 
   const strategyIds = providerStrategies.map((s) => s.id);
   const recentPayments =

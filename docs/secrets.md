@@ -115,6 +115,8 @@ Generate a fresh wallet:
 npx tsx scripts/generate-wallet.ts
 ```
 
+This bootstrap is for local runtimes and helper scripts. A pure OpenClaw skill cannot create or persist a wallet by itself.
+
 Then fund it with a small amount of USDT (USD₮0) on X Layer:
 - Token address: `0x779ded0c9e1022225f8e0630b35a9b54be713736`
 - Open OKX Exchange → Withdraw → USDT → Network: **X Layer**

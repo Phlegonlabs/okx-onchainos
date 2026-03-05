@@ -6,11 +6,30 @@ metadata: { "openclaw": { "emoji": "📊", "requires": { "env": ["STRATEGY_SQUAR
 
 # Strategy Square
 
-An AI-native on-chain strategy marketplace powered by OKX OnchainOS. Purchase trading signals via x402 payments on X Layer (zero gas).
+An AI-native on-chain strategy marketplace powered by OKX OnchainOS.
+
+## Prerequisites
+
+This skill does **not** install or generate a wallet by itself.
+
+To use paid or write routes, the OpenClaw runtime must already have:
+- an X Layer wallet with USDT (USDt0)
+- a signing capability for custom wallet-auth headers
+- x402 payment capability for `402 -> X-Payment -> retry`
+
+If your OpenClaw environment only supports pure skill text without a wallet runtime, use this skill in read-only mode:
+- `GET /api/strategies`
+- `GET /api/strategies/{id}`
+- `GET /api/research/supported-assets`
+- `GET /api/research/price`
 
 ## Configuration
 
-Set `STRATEGY_SQUARE_URL` to the base URL of the Strategy Square instance (e.g., `https://strategy-square.vercel.app`).
+Set `STRATEGY_SQUARE_URL` to the base URL of the Strategy Square instance.
+
+If you embed this repo's helper runtime, use:
+- `createOpenClawX402Wallet(...).requestWithWalletAuth(...)` for provider writes and subscription creation
+- `createOpenClawX402Wallet(...).requestWithAutoPayment(...)` for x402-paid reads
 
 ## Available Actions
 
@@ -34,18 +53,38 @@ GET {STRATEGY_SQUARE_URL}/api/strategies/{id}
 
 Response: `{ strategy: {...}, recentSignals: [...] }`
 
-### Purchase Signals (x402 Payment Required)
+### Subscribe to a Strategy (wallet-signed)
 
 ```
-GET {STRATEGY_SQUARE_URL}/api/strategies/{id}/signals
+POST {STRATEGY_SQUARE_URL}/api/strategies/{id}/subscribe
+Content-Type: application/json
+X-Wallet-Address: 0x...
+X-Wallet-Timestamp: 1700000000000
+X-Wallet-Nonce: 0x...
+X-Wallet-Signature: 0x...
+{
+  "subscriberAddress": "0xYourWalletAddress",
+  "planDays": 30
+}
 ```
 
-First request returns HTTP 402 with payment requirements. Your x402 payment provider (Claw402 or built-in wallet) will automatically handle the payment flow:
-1. Read payment requirements from the 402 response
-2. Sign the USDT (USD₮0) transfer authorization on X Layer
-3. Retry request with `X-Payment` header
+Behavior:
+1. Request must be signed by the same wallet as `subscriberAddress`
+2. Existing active subscription is reused
+3. Success response returns `{ strategy, subscription, reused }`
 
-After payment, response: `{ signals: [...], receipt: { txHash, paidAmount, providerCredited, platformFee } }`
+### Poll Subscription Signals (x402 payment when pending signals exist)
+
+```
+GET {STRATEGY_SQUARE_URL}/api/subscriptions/{subscriptionId}/signals
+```
+
+Behavior:
+1. If there are no new signals, response is free: `{ pendingCount: 0, signals: [] }`
+2. If new signals exist, first response returns HTTP 402 + `paymentRequirements`
+3. Your x402 wallet signs and retries with `X-Payment`
+4. Success response returns `{ signals, openclawMessages, receipt }`
+5. The x402 payer must match the original `subscriberAddress`
 
 ### Research Market Data (OpenClaw Analysis Flow)
 
@@ -74,11 +113,15 @@ Behavior:
 
 Use this route to run your own quantitative analysis and strategy research in OpenClaw.
 
-### Publish a Strategy (Provider)
+### Publish a Strategy (wallet-signed provider write)
 
 ```
 POST {STRATEGY_SQUARE_URL}/api/strategies
 Content-Type: application/json
+X-Wallet-Address: 0x...
+X-Wallet-Timestamp: 1700000000000
+X-Wallet-Nonce: 0x...
+X-Wallet-Signature: 0x...
 {
   "name": "My Strategy",
   "description": "Description of the strategy logic",
@@ -91,11 +134,17 @@ Content-Type: application/json
 
 `pricePerSignal` is in cents (5 = $0.05). Response: `201 { id }`
 
-### Push a Signal (Provider)
+The signing wallet must match `providerAddress`.
+
+### Push a Signal (wallet-signed provider write)
 
 ```
 PUT {STRATEGY_SQUARE_URL}/api/strategies/{id}/signals
 Content-Type: application/json
+X-Wallet-Address: 0x...
+X-Wallet-Timestamp: 1700000000000
+X-Wallet-Nonce: 0x...
+X-Wallet-Signature: 0x...
 {
   "action": "buy",
   "token": "ETH",
@@ -114,6 +163,14 @@ GET {STRATEGY_SQUARE_URL}/api/providers/{walletAddress}
 
 Response: `{ balance: { totalEarnedCents, pendingCents, totalSignalsSold }, strategies: [...] }`
 
+### Legacy Direct Signal Purchase
+
+```
+GET {STRATEGY_SQUARE_URL}/api/strategies/{id}/signals
+```
+
+This direct-buy route still exists, but OpenClaw integrations should prefer the subscription flow above.
+
 ## Payment Details
 
 - Network: X Layer (zero gas fees)
@@ -121,4 +178,4 @@ Response: `{ balance: { totalEarnedCents, pendingCents, totalSignalsSold }, stra
 - Protocol: x402 v1
 - Platform fee: 10% (90% goes to strategy provider)
 - Research candles API price: `$0.001` per request (`/api/research/candles`)
-- No API key or account needed — payment is authentication
+- The skill itself does not provision wallets or keys

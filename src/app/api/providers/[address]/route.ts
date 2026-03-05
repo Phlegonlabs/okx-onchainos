@@ -8,11 +8,12 @@ export async function GET(
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
+  const normalizedAddress = address.toLowerCase();
 
   const balance = await db
     .select()
     .from(providerBalances)
-    .where(eq(providerBalances.providerAddress, address))
+    .where(eq(providerBalances.providerAddress, normalizedAddress))
     .get();
 
   if (!balance) {
@@ -28,7 +29,7 @@ export async function GET(
       totalSignals: strategies.totalSignals,
     })
     .from(strategies)
-    .where(eq(strategies.providerAddress, address));
+    .where(eq(strategies.providerAddress, normalizedAddress));
 
   return NextResponse.json({ balance, strategies: providerStrategies });
 }

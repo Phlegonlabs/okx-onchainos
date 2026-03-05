@@ -54,6 +54,13 @@ export const providerBalances = sqliteTable("provider_balances", {
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
 
+export const walletAuthNonces = sqliteTable("wallet_auth_nonces", {
+  id: text("id").primaryKey(),
+  address: text("address").notNull(),
+  nonce: text("nonce").notNull(),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});
+
 export const subscriptions = sqliteTable("subscriptions", {
   id: text("id").primaryKey(),
   strategyId: text("strategy_id")

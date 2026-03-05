@@ -9,6 +9,10 @@ import {
   buildPaymentRequirements,
   type PaymentPayload,
 } from "@/lib/x402";
+import {
+  verifyWalletAuthRequest,
+  WalletAuthError,
+} from "@/lib/wallet-auth";
 
 const PLATFORM_FEE_PCT = parseInt(process.env.PLATFORM_FEE_PCT || "10", 10);
 
@@ -171,7 +175,29 @@ export async function PUT(
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
   }
 
-  const body = await req.json();
+  const rawBody = await req.text();
+  let body;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
+  }
+
+  try {
+    await verifyWalletAuthRequest({
+      headers: req.headers,
+      method: req.method,
+      path: req.nextUrl.pathname,
+      rawBody,
+      expectedAddress: strategy.providerAddress,
+    });
+  } catch (error) {
+    if (error instanceof WalletAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
+  }
+
   const { action, token, entry, stopLoss, takeProfit, reasoning } = body;
 
   if (!action || !token || entry == null) {

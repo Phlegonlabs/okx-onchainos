@@ -33,9 +33,10 @@ const flowMaps: FlowMap[] = [
       {
         title: "Create or reuse subscription",
         detail:
-          "Submit subscriberAddress (+ optional planDays). Existing active plan is reused.",
+          "Submit subscriberAddress (+ optional planDays) with wallet-auth headers. Existing active plan is reused.",
         method: "POST",
         path: "/api/strategies/:id/subscribe",
+        note: "Signing wallet must equal subscriberAddress",
       },
       {
         title: "Read subscription state",
@@ -55,14 +56,14 @@ const flowMaps: FlowMap[] = [
       {
         title: "Create strategy",
         detail:
-          "Publish one strategy with name/asset/timeframe/price and provider address.",
+          "Publish one strategy with wallet-auth headers. providerAddress must equal the signing wallet.",
         method: "POST",
         path: "/api/strategies",
       },
       {
         title: "Push a signal",
         detail:
-          "Append one BUY/SELL signal to strategy. This becomes billable for subscribers.",
+          "Append one BUY/SELL signal with the same provider wallet. This becomes billable for subscribers.",
         method: "PUT",
         path: "/api/strategies/:id/signals",
       },
@@ -87,6 +88,7 @@ const flowMaps: FlowMap[] = [
           "Call subscription signals endpoint. Empty queue returns 200 with no payment.",
         method: "GET",
         path: "/api/subscriptions/:subscriptionId/signals",
+        note: "x402 payer must equal the original subscriberAddress",
       },
       {
         title: "Handle HTTP 402",
@@ -162,7 +164,7 @@ export default function OperationsPage() {
           Payment Model
         </h2>
         <div className="mt-4 space-y-2 text-sm text-zinc-300">
-          <p>1. Create subscription once for a strategy (default 30 days).</p>
+          <p>1. Create subscription once for a strategy (default 30 days) with wallet-auth headers.</p>
           <p>
             2. Poll subscription signals. If no new signals, response is free.
           </p>
@@ -179,6 +181,9 @@ export default function OperationsPage() {
           <p>
             6. Every response with signals also includes `openclawMessages` so
             OpenClaw can immediately consume BUY/SELL notifications.
+          </p>
+          <p>
+            7. Provider writes and subscription creation are signed by the agent wallet. The skill itself does not install that wallet.
           </p>
         </div>
       </section>
@@ -208,8 +213,13 @@ export default function OperationsPage() {
         <div className="mt-4 grid gap-3 text-sm">
           <ApiItem
             method="POST"
+            path="/api/strategies"
+            desc="Create strategy. Requires wallet-auth signed request from providerAddress."
+          />
+          <ApiItem
+            method="POST"
             path="/api/strategies/:id/subscribe"
-            desc="Create or reuse an active subscription."
+            desc="Create or reuse an active subscription. Requires wallet-auth signed request from subscriberAddress."
           />
           <ApiItem
             method="GET"
@@ -217,9 +227,14 @@ export default function OperationsPage() {
             desc="Read active subscription status for a wallet."
           />
           <ApiItem
+            method="PUT"
+            path="/api/strategies/:id/signals"
+            desc="Push a new signal. Requires wallet-auth signed request from the strategy owner."
+          />
+          <ApiItem
             method="GET"
             path="/api/subscriptions/:subscriptionId/signals"
-            desc="Fetch pending signals; returns 402 only when payment is needed, and returns openclawMessages after payment."
+            desc="Fetch pending signals; returns 402 only when payment is needed. x402 payer must match the subscription wallet."
           />
           <ApiItem
             method="GET"

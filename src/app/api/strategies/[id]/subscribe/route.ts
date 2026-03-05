@@ -3,6 +3,10 @@ import { db } from "@/db/client";
 import { strategies, subscriptions } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import {
+  verifyWalletAuthRequest,
+  WalletAuthError,
+} from "@/lib/wallet-auth";
 
 const DEFAULT_PLAN_DAYS = 30;
 const MIN_PLAN_DAYS = 1;
@@ -29,7 +33,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const subscriberAddress = (req.nextUrl.searchParams.get("subscriberAddress") || "").trim();
+  const subscriberAddress = (
+    req.nextUrl.searchParams.get("subscriberAddress") || ""
+  )
+    .trim()
+    .toLowerCase();
 
   if (!subscriberAddress || !ADDRESS_REGEX.test(subscriberAddress)) {
     return NextResponse.json(
@@ -90,17 +98,34 @@ export async function POST(
     return NextResponse.json({ error: "Active strategy not found" }, { status: 404 });
   }
 
+  const rawBody = await req.text();
   let body: SubscribeBody = {};
   try {
-    body = (await req.json()) as SubscribeBody;
+    body = (JSON.parse(rawBody || "{}")) as SubscribeBody;
   } catch {}
 
-  const subscriberAddress = (body.subscriberAddress || "").trim();
+  const subscriberAddress = (body.subscriberAddress || "").trim().toLowerCase();
   if (!subscriberAddress || !ADDRESS_REGEX.test(subscriberAddress)) {
     return NextResponse.json(
       { error: "subscriberAddress is required and must be a valid EVM address" },
       { status: 400 }
     );
+  }
+
+  let authAddress;
+  try {
+    authAddress = await verifyWalletAuthRequest({
+      headers: req.headers,
+      method: req.method,
+      path: req.nextUrl.pathname,
+      rawBody,
+      expectedAddress: subscriberAddress,
+    });
+  } catch (error) {
+    if (error instanceof WalletAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
   }
 
   const planDays = normalizePlanDays(body.planDays);
@@ -111,7 +136,7 @@ export async function POST(
     .where(
       and(
         eq(subscriptions.strategyId, id),
-        eq(subscriptions.subscriberAddress, subscriberAddress),
+        eq(subscriptions.subscriberAddress, authAddress),
         eq(subscriptions.status, "active"),
         sql`${subscriptions.expiresAt} > datetime('now')`
       )
@@ -140,7 +165,7 @@ export async function POST(
   await db.insert(subscriptions).values({
     id: subscriptionId,
     strategyId: id,
-    subscriberAddress,
+    subscriberAddress: authAddress,
     planDays,
     status: "active",
     startedAt,

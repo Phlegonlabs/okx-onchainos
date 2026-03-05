@@ -3,6 +3,10 @@ import { db } from "@/db/client";
 import { strategies, providerBalances } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import {
+  verifyWalletAuthRequest,
+  WalletAuthError,
+} from "@/lib/wallet-auth";
 
 export async function GET(req: NextRequest) {
   const sort = req.nextUrl.searchParams.get("sort") || "newest";
@@ -29,7 +33,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const rawBody = await req.text();
+
+  let body;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
+  }
+
   const { name, description, asset, timeframe, pricePerSignal, providerAddress } = body;
 
   if (!name || !description || !asset || !timeframe || !pricePerSignal || !providerAddress) {
@@ -37,6 +49,22 @@ export async function POST(req: NextRequest) {
       { error: "Missing required fields: name, description, asset, timeframe, pricePerSignal, providerAddress" },
       { status: 400 }
     );
+  }
+
+  let authAddress;
+  try {
+    authAddress = await verifyWalletAuthRequest({
+      headers: req.headers,
+      method: req.method,
+      path: req.nextUrl.pathname,
+      rawBody,
+      expectedAddress: providerAddress,
+    });
+  } catch (error) {
+    if (error instanceof WalletAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
   }
 
   const id = nanoid(12);
@@ -47,13 +75,13 @@ export async function POST(req: NextRequest) {
     asset,
     timeframe,
     pricePerSignal,
-    providerAddress,
+    providerAddress: authAddress,
   });
 
   // Ensure provider balance row exists
   await db
     .insert(providerBalances)
-    .values({ providerAddress, totalEarnedCents: 0, pendingCents: 0, totalSignalsSold: 0 })
+    .values({ providerAddress: authAddress, totalEarnedCents: 0, pendingCents: 0, totalSignalsSold: 0 })
     .onConflictDoNothing();
 
   return NextResponse.json({ id }, { status: 201 });

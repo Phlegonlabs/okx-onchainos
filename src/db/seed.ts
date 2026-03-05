@@ -73,7 +73,7 @@ const seedStrategies = [
     asset: "ETH/USDC",
     timeframe: "4h",
     pricePerSignal: 5,
-    providerAddress: "0xAlpha1234567890abcdef1234567890abcdef1234",
+    providerAddress: "0xa111111111111111111111111111111111111111",
     token: "ETH",
     basePrice: 3200,
     signalCount: 22,
@@ -86,7 +86,7 @@ const seedStrategies = [
     asset: "BTC/USDC",
     timeframe: "1d",
     pricePerSignal: 8,
-    providerAddress: "0xBeta0987654321fedcba0987654321fedcba0987",
+    providerAddress: "0xb222222222222222222222222222222222222222",
     token: "BTC",
     basePrice: 95000,
     signalCount: 18,
@@ -99,7 +99,7 @@ const seedStrategies = [
     asset: "SOL/USDC",
     timeframe: "4h",
     pricePerSignal: 6,
-    providerAddress: "0xGamma1111222233334444555566667777888899990",
+    providerAddress: "0xc333333333333333333333333333333333333333",
     token: "SOL",
     basePrice: 180,
     signalCount: 25,
@@ -112,7 +112,7 @@ const seedStrategies = [
     asset: "ETH/USDC",
     timeframe: "1d",
     pricePerSignal: 7,
-    providerAddress: "0xDeltaAAAABBBBCCCCDDDDEEEEFFFF000011112222",
+    providerAddress: "0xd444444444444444444444444444444444444444",
     token: "ETH",
     basePrice: 3200,
     signalCount: 20,
@@ -175,6 +175,13 @@ async function seed() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS wallet_auth_nonces (
+      id TEXT PRIMARY KEY,
+      address TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS subscriptions (
       id TEXT PRIMARY KEY,
       strategy_id TEXT NOT NULL REFERENCES strategies(id),
@@ -194,7 +201,7 @@ async function seed() {
       resource TEXT NOT NULL,
       inst_id TEXT NOT NULL,
       bar TEXT NOT NULL,
-      limit INTEGER NOT NULL,
+      "limit" INTEGER NOT NULL,
       amount_micro_usd INTEGER NOT NULL,
       amount_base_units TEXT NOT NULL,
       tx_hash TEXT,
@@ -203,6 +210,7 @@ async function seed() {
     );
 
     DELETE FROM research_payments;
+    DELETE FROM wallet_auth_nonces;
     DELETE FROM subscriptions;
     DELETE FROM signals;
     DELETE FROM payments;

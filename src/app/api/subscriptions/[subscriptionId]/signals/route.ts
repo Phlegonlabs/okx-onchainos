@@ -15,6 +15,7 @@ import {
   type PaymentPayload,
   verifyPayment,
 } from "@/lib/x402";
+import { resolvePaymentPayer } from "@/lib/wallet-auth";
 
 const PLATFORM_FEE_PCT = parseInt(process.env.PLATFORM_FEE_PCT || "10", 10);
 
@@ -155,6 +156,18 @@ export async function GET(
     );
   }
 
+  const payerAddress = resolvePaymentPayer(verifyResult.payer, paymentPayload);
+  if (payerAddress !== subscription.subscriberAddress.toLowerCase()) {
+    return NextResponse.json(
+      {
+        error: "Payment wallet does not match subscription owner",
+        expectedSubscriberAddress: subscription.subscriberAddress,
+        payerAddress,
+      },
+      { status: 403 }
+    );
+  }
+
   const settleResult = await settlePayment(paymentPayload, paymentReqs);
   if (!settleResult.success) {
     return NextResponse.json(
@@ -216,6 +229,7 @@ export async function GET(
       strategyId: strategy.id,
       strategyName: strategy.name,
       paidAmount: amountCents,
+      payerAddress,
       providerCredited: providerCents,
       platformFee: platformCents,
       txHash: settleResult.txHash,

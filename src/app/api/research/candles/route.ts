@@ -16,6 +16,7 @@ import {
   type PaymentPayload,
   verifyPayment,
 } from "@/lib/x402";
+import { resolvePaymentPayer } from "@/lib/wallet-auth";
 
 const DEFAULT_LIMIT = 120;
 
@@ -146,8 +147,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const payerAddress =
-    verifyResult.payer || paymentPayload.payload.authorization.from || "";
+  const payerAddress = resolvePaymentPayer(verifyResult.payer, paymentPayload);
 
   await db.insert(researchPayments).values({
     id: nanoid(12),

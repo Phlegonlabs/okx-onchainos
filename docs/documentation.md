@@ -2,40 +2,65 @@
 
 ## What is Strategy Square?
 
-Strategy Square is an AI-native on-chain strategy marketplace. Trading strategy providers publish signals, and consumers purchase them using the x402 payment protocol on OKX's X Layer network.
+Strategy Square is an AI-native on-chain strategy marketplace. Providers publish strategies, subscribers create a 30-day subscription, and new signals are billed through x402 on OKX X Layer.
+
+## OpenClaw Wallet Requirement
+
+This product assumes the OpenClaw runtime already has:
+- an X Layer wallet
+- enough USDT (USDt0) to pay x402 requests
+- the ability to sign wallet-auth headers for provider writes and subscription creation
+
+The skill itself does not install or provision this wallet.
 
 ## For Strategy Providers
 
-### Publish a Strategy
+### Publish a Strategy (wallet-signed)
 
-```bash
-curl -X POST https://okx-onchainos.vercel.app/api/strategies \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "My Alpha Strategy",
-    "description": "RSI-based ETH trading signals",
-    "asset": "ETH/USDC",
-    "timeframe": "4h",
-    "pricePerSignal": 5,
-    "providerAddress": "0xYourWalletAddress"
-  }'
+`POST /api/strategies` requires these headers:
+- `X-Wallet-Address`
+- `X-Wallet-Timestamp`
+- `X-Wallet-Nonce`
+- `X-Wallet-Signature`
+
+The signing wallet must match `providerAddress`.
+
+Example body:
+
+```json
+{
+  "name": "My Alpha Strategy",
+  "description": "RSI-based ETH trading signals",
+  "asset": "ETH/USDC",
+  "timeframe": "4h",
+  "pricePerSignal": 5,
+  "providerAddress": "0xYourWalletAddress"
+}
 ```
 
 Response: `201 { "id": "abc123" }`
 
-### Push a Signal
+### Push a Signal (wallet-signed)
+
+`PUT /api/strategies/abc123/signals` requires the same wallet-auth headers. The signing wallet must match the strategy owner.
+
+Example body:
+
+```json
+{
+  "action": "buy",
+  "token": "ETH",
+  "entry": 3250.5,
+  "stopLoss": 3100,
+  "takeProfit": 3500,
+  "reasoning": "RSI crossed above 30, bullish divergence on 4h"
+}
+```
+
+### Check Provider Earnings
 
 ```bash
-curl -X PUT https://okx-onchainos.vercel.app/api/strategies/abc123/signals \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "buy",
-    "token": "ETH",
-    "entry": 3250.50,
-    "stopLoss": 3100.00,
-    "takeProfit": 3500.00,
-    "reasoning": "RSI crossed above 30, bullish divergence on 4h"
-  }'
+curl https://okx-onchainos.vercel.app/api/providers/0xYourWalletAddress
 ```
 
 ## For Strategy Consumers
@@ -46,24 +71,48 @@ curl -X PUT https://okx-onchainos.vercel.app/api/strategies/abc123/signals \
 curl https://okx-onchainos.vercel.app/api/strategies
 ```
 
-### Purchase Signals (x402)
+### Create or Reuse Subscription (wallet-signed)
 
-First request returns 402 with payment requirements:
+`POST /api/strategies/{id}/subscribe` requires wallet-auth headers.
+
+Example body:
+
+```json
+{
+  "subscriberAddress": "0xYourWalletAddress",
+  "planDays": 30
+}
+```
+
+Behavior:
+- signing wallet must match `subscriberAddress`
+- existing active subscription is reused
+- success response returns `{ strategy, subscription, reused }`
+
+### Poll Subscription Signals (x402)
+
+```bash
+curl -i https://okx-onchainos.vercel.app/api/subscriptions/sub_123/signals
+```
+
+Behavior:
+- if no new signals exist, response is free
+- if new signals exist, response is `402` with `paymentRequirements`
+- retry with `X-Payment`
+- x402 payer must match the original `subscriberAddress`
+
+Success response includes:
+- `signals`
+- `openclawMessages`
+- `receipt`
+
+### Legacy Direct Purchase Route
 
 ```bash
 curl -i https://okx-onchainos.vercel.app/api/strategies/abc123/signals
-# HTTP 402 Payment Required
-# X-Payment-Requirements: { ... }
 ```
 
-Then pay and retry with the payment header:
-
-```bash
-curl https://okx-onchainos.vercel.app/api/strategies/abc123/signals \
-  -H "X-Payment: {x402 payment payload}"
-```
-
-Response includes signals + payment receipt with txHash.
+This route still works, but new OpenClaw integrations should prefer the subscription flow.
 
 ## For OpenClaw Strategy Research
 
@@ -81,20 +130,13 @@ curl "https://okx-onchainos.vercel.app/api/research/price?instId=BTC-USDT"
 
 ### Get Candles (x402, $0.001 per request)
 
-First request returns 402 with payment requirements:
-
 ```bash
 curl -i "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
-```
-
-Retry with payment header:
-
-```bash
 curl "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
   -H "X-Payment: {x402 payment payload}"
 ```
 
-Response includes standardized candle data + receipt:
+Response includes standardized candle data and a payment receipt:
 `{ candles: [...], receipt: { paidMicroUsd, paidBaseUnits, txHash } }`
 
 ## Supported Payment

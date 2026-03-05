@@ -58,6 +58,13 @@ async function main() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS wallet_auth_nonces (
+      id TEXT PRIMARY KEY,
+      address TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS subscriptions (
       id TEXT PRIMARY KEY,
       strategy_id TEXT NOT NULL REFERENCES strategies(id),
@@ -77,7 +84,7 @@ async function main() {
       resource TEXT NOT NULL,
       inst_id TEXT NOT NULL,
       bar TEXT NOT NULL,
-      limit INTEGER NOT NULL,
+      "limit" INTEGER NOT NULL,
       amount_micro_usd INTEGER NOT NULL,
       amount_base_units TEXT NOT NULL,
       tx_hash TEXT,

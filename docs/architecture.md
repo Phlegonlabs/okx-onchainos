@@ -7,7 +7,7 @@
 
 Strategy Square is an agent-to-agent strategy marketplace:
 
-- **Provider Agents** (OpenClaw) publish trading strategies and earn USDC
+- **Provider Agents** (OpenClaw) publish trading strategies and earn USDT-settled revenue credits
 - **Consumer Agents** (OpenClaw) browse and purchase signals via x402
 - **Platform** hosts strategies, facilitates x402 payments, tracks provider earnings
 
@@ -43,7 +43,8 @@ Consumer Agent --x402--> Platform Wallet (100%)
 ```
 Provider Agent
   POST /api/strategies
-    body: { name, description, asset, timeframe, pricePerSignal, signals[] }
+    headers: X-Wallet-Address / X-Wallet-Timestamp / X-Wallet-Nonce / X-Wallet-Signature
+    body: { name, description, asset, timeframe, pricePerSignal, providerAddress }
   <- 201 { strategyId }
 ```
 
@@ -52,25 +53,33 @@ Provider can later push new signals:
 ```
 Provider Agent
   PUT /api/strategies/:id/signals
+    headers: X-Wallet-Address / X-Wallet-Timestamp / X-Wallet-Nonce / X-Wallet-Signature
     body: { action: "buy"|"sell", token, entry, stopLoss, takeProfit, reasoning }
   <- 200 { signalId }
 ```
 
-### Journey 2: Consumer purchases signals
+### Journey 2: Consumer subscribes and purchases pending signals
 
 ```
 Consumer Agent
-  GET /api/strategies/:id/signals
+  POST /api/strategies/:id/subscribe
+    headers: X-Wallet-Address / X-Wallet-Timestamp / X-Wallet-Nonce / X-Wallet-Signature
+    body: { subscriberAddress, planDays }
+  <- 201 { subscription }
+
+Consumer Agent
+  GET /api/subscriptions/:subscriptionId/signals
   <- 402 Payment Required
      X-Payment-Requirements: { scheme, maxAmountRequired, payTo, asset, resource }
 
 Consumer Agent (retry with payment)
-  GET /api/strategies/:id/signals
+  GET /api/subscriptions/:subscriptionId/signals
     X-Payment: { x402Version, scheme, payload: { signature, authorization } }
 
 Server:
-  1. POST https://web3.okx.com/api/v6/payments/verify  -> isValid?
-  2. POST https://web3.okx.com/api/v6/payments/settle   -> txHash
+  1. POST https://web3.okx.com/api/v6/x402/verify  -> isValid + payer
+  2. payer must equal subscription.subscriberAddress
+  3. POST https://web3.okx.com/api/v6/x402/settle   -> txHash
   <- 200 { signals[], receipt: { txHash } }
 ```
 
@@ -161,9 +170,12 @@ research_payments
 |--------|------------------------------|---------|--------------------------|
 | GET    | `/api/strategies`            | None    | List strategies          |
 | GET    | `/api/strategies/:id`        | None    | Strategy details         |
-| POST   | `/api/strategies`            | None    | Create strategy          |
+| POST   | `/api/strategies`            | Wallet  | Create strategy          |
+| POST   | `/api/strategies/:id/subscribe` | Wallet | Create/reuse subscription |
+| GET    | `/api/strategies/:id/subscribe` | None | Read subscription status |
+| GET    | `/api/subscriptions/:subscriptionId/signals` | x402 + payer match | Poll pending subscription signals |
 | GET    | `/api/strategies/:id/signals`| x402    | Get signals (paid)       |
-| PUT    | `/api/strategies/:id/signals`| None    | Push new signal          |
+| PUT    | `/api/strategies/:id/signals`| Wallet  | Push new signal          |
 | GET    | `/api/providers/:address`    | None    | Provider balance/stats   |
 | GET    | `/api/market/:token`         | None    | Token price (proxy OKX)  |
 | GET    | `/api/research/supported-assets` | None | OnchainOS supported assets |
@@ -184,7 +196,7 @@ research_payments
                         Yes
                          |
               ┌──────────▼──────────┐
-              │  OKX /payments/verify│
+              │   OKX /x402/verify   │
               └──────────┬──────────┘
                     isValid?
                     /      \
@@ -211,8 +223,8 @@ research_payments
 
 ### x402 Payments
 - `GET /api/v6/payments/supported/` - check supported chains
-- `POST /api/v6/payments/verify` - verify payment signature (Bearer token)
-- `POST /api/v6/payments/settle` - settle on-chain (HMAC-SHA256 auth)
+- `POST /api/v6/x402/verify` - verify payment signature
+- `POST /api/v6/x402/settle` - settle on-chain (HMAC-SHA256 auth)
 - Network: X Layer (chainIndex: 196), zero gas
 - Assets: USDC, USDT, USDG
 
@@ -244,8 +256,14 @@ okx-onchainos/
 │   │       │   ├── route.ts            # GET list, POST create
 │   │       │   └── [id]/
 │   │       │       ├── route.ts        # GET detail
+│   │       │       ├── subscribe/
+│   │       │       │   └── route.ts    # GET/POST subscription status + create
 │   │       │       └── signals/
-│   │       │           └── route.ts    # GET (x402), PUT (push)
+│   │       │           └── route.ts    # GET (x402), PUT (wallet-signed push)
+│   │       ├── subscriptions/
+│   │       │   └── [subscriptionId]/
+│   │       │       └── signals/
+│   │       │           └── route.ts    # GET pending signals (x402 + payer match)
 │   │       ├── providers/
 │   │       │   └── [address]/
 │   │       │       └── route.ts        # GET provider balance
@@ -265,6 +283,8 @@ okx-onchainos/
 │   │   └── seed.ts                     # Demo strategies
 │   ├── lib/
 │   │   ├── x402.ts                     # x402 verify/settle helpers
+│   │   ├── wallet-auth.ts              # wallet-signed request verification
+│   │   ├── openclaw-x402-wallet.ts     # OpenClaw wallet helper runtime
 │   │   ├── okx-auth.ts                 # OKX HMAC signing
 │   │   ├── market.ts                   # OKX Market API client
 │   │   └── research.ts                 # OnchainOS research data client
@@ -299,8 +319,11 @@ Each seeded with ~20 historical signals, realistic win rates (55-70%), and retur
 ### What agents need to use our platform
 
 1. **Our skill installed** — `SKILL.md` teaches the agent our API endpoints
-2. **A wallet with USDC on X Layer** — for x402 payments
+2. **A wallet with USDT on X Layer** — for x402 payments
 3. **x402 payment capability** — built into OpenClaw natively, or via Claw402 MCP server
+4. **Wallet-auth signing capability** — for provider writes and subscription creation
+
+The skill itself does not provision or persist this wallet. In a pure skill-only runtime, paid and write flows cannot be fully automated.
 
 ### Our skill (SKILL.md)
 
@@ -315,9 +338,10 @@ metadata: { "openclaw": { "emoji": "📊", "requires": { "env": ["STRATEGY_SQUAR
 The skill instructs the agent to:
 - `GET {STRATEGY_SQUARE_URL}/api/strategies` — list strategies
 - `GET {STRATEGY_SQUARE_URL}/api/strategies/:id` — get details
-- `POST {STRATEGY_SQUARE_URL}/api/strategies` — publish a strategy (provider)
-- `PUT {STRATEGY_SQUARE_URL}/api/strategies/:id/signals` — push signal (provider)
-- `GET {STRATEGY_SQUARE_URL}/api/strategies/:id/signals` — buy signals (consumer, x402 gated)
+- `POST {STRATEGY_SQUARE_URL}/api/strategies` — publish a strategy (provider, wallet-signed)
+- `PUT {STRATEGY_SQUARE_URL}/api/strategies/:id/signals` — push signal (provider, wallet-signed)
+- `POST {STRATEGY_SQUARE_URL}/api/strategies/:id/subscribe` — create/reuse subscription (wallet-signed)
+- `GET {STRATEGY_SQUARE_URL}/api/subscriptions/:subscriptionId/signals` — buy pending signals (consumer, x402 gated)
 - `GET {STRATEGY_SQUARE_URL}/api/providers/:address` — check earnings (provider)
 - `GET {STRATEGY_SQUARE_URL}/api/research/supported-assets` — discover assets (free)
 - `GET {STRATEGY_SQUARE_URL}/api/research/price?instId=BTC-USDT` — spot price (free)
@@ -326,16 +350,16 @@ The skill instructs the agent to:
 ### x402 payment flow (agent perspective)
 
 ```
-Agent calls GET /api/strategies/:id/signals
+Agent calls GET /api/subscriptions/:subscriptionId/signals
   <- 402 Payment Required
      Response body: {
        x402Version: "1",
        paymentRequirements: {
          scheme: "exact",
-         maxAmountRequired: "5000",     // $0.05 in USDC decimals
+         maxAmountRequired: "5000",     // $0.05 in USDT 6-decimal base units
          payTo: "0xPlatformWallet",
-         asset: "0x..USDC",
-         resource: "/api/strategies/:id/signals"
+         asset: "0x..USDT",
+         resource: "/api/subscriptions/:subscriptionId/signals"
        }
      }
 
@@ -345,10 +369,11 @@ Agent's wallet (Claw402 / built-in) automatically:
   3. Retries request with X-Payment header containing signed payload
 
 Server receives X-Payment:
-  1. Calls OKX /payments/verify -> isValid
-  2. Calls OKX /payments/settle -> txHash
-  3. Credits provider balance (90%)
-  4. Returns 200 + signals + receipt
+  1. Calls OKX /x402/verify -> isValid
+  2. Ensures payer == subscriberAddress
+  3. Calls OKX /x402/settle -> txHash
+  4. Credits provider balance (90%)
+  5. Returns 200 + signals + receipt
 ```
 
 ### What the agent does NOT need

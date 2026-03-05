@@ -77,11 +77,16 @@ curl https://okx-onchainos.vercel.app/api/strategies
 
 ### 2) Operation Flows
 
-Provider flow:
-- `POST /api/strategies` -> `PUT /api/strategies/{id}/signals` -> `GET /api/providers/{address}`
+Wallet prerequisite:
+- The skill does not install or generate a wallet.
+- Paid or write routes require an OpenClaw runtime that can sign wallet-auth headers and handle x402 payments.
+- Pure skill-only environments can only use read-only routes.
 
-Consumer flow (x402):
-- `GET /api/strategies` -> `GET /api/strategies/{id}/signals` (returns `402`) -> retry with `X-Payment` -> receive signals + receipt
+Provider flow:
+- `POST /api/strategies` (wallet-signed) -> `PUT /api/strategies/{id}/signals` (wallet-signed) -> `GET /api/providers/{address}`
+
+Consumer flow (subscription + x402):
+- `GET /api/strategies` -> `POST /api/strategies/{id}/subscribe` (wallet-signed) -> `GET /api/subscriptions/{subscriptionId}/signals` -> if pending signals exist, retry with `X-Payment`
 
 Research flow:
 - `GET /api/research/supported-assets` (free) -> `GET /api/research/price` (free) -> `GET /api/research/candles` (returns `402`) -> retry with `X-Payment`
@@ -90,34 +95,50 @@ Research flow:
 
 #### Provider Operations
 
-Publish a strategy:
+Publish a strategy with the repo helper:
 
-```bash
-curl -X POST https://okx-onchainos.vercel.app/api/strategies \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name": "My Alpha Strategy",
-    "description": "RSI-based ETH trading signals",
-    "asset": "ETH/USDC",
-    "timeframe": "4h",
-    "pricePerSignal": 5,
-    "providerAddress": "0xYourWallet"
-  }'
+```ts
+import { createOpenClawX402Wallet } from "@/lib/openclaw-x402-wallet";
+
+const wallet = createOpenClawX402Wallet({
+  privateKey: process.env.OPENCLAW_AGENT_PRIVATE_KEY as `0x${string}`,
+});
+
+const createRes = await wallet.requestWithWalletAuth(
+  "https://okx-onchainos.vercel.app/api/strategies",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "My Alpha Strategy",
+      description: "RSI-based ETH trading signals",
+      asset: "ETH/USDC",
+      timeframe: "4h",
+      pricePerSignal: 5,
+      providerAddress: wallet.address,
+    }),
+  }
+);
 ```
 
-Push a signal:
+Push a signal with the same provider wallet:
 
-```bash
-curl -X PUT https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "action": "buy",
-    "token": "ETH",
-    "entry": 3250.50,
-    "stopLoss": 3100.00,
-    "takeProfit": 3500.00,
-    "reasoning": "RSI crossed above 30"
-  }'
+```ts
+await wallet.requestWithWalletAuth(
+  "https://okx-onchainos.vercel.app/api/strategies/{id}/signals",
+  {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "buy",
+      token: "ETH",
+      entry: 3250.5,
+      stopLoss: 3100,
+      takeProfit: 3500,
+      reasoning: "RSI crossed above 30",
+    }),
+  }
+);
 ```
 
 Check provider earnings:
@@ -134,16 +155,38 @@ Browse strategies:
 curl https://okx-onchainos.vercel.app/api/strategies
 ```
 
-Purchase signals:
+Create or reuse a subscription with wallet auth:
+
+```ts
+const subscribeRes = await wallet.requestWithWalletAuth(
+  "https://okx-onchainos.vercel.app/api/strategies/{id}/subscribe",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subscriberAddress: wallet.address,
+      planDays: 30,
+    }),
+  }
+);
+
+const { subscription } = await subscribeRes.json();
+```
+
+Poll subscription signals with auto x402 payment:
+
+```ts
+const { response, paid } = await wallet.requestWithAutoPayment(
+  `https://okx-onchainos.vercel.app/api/subscriptions/${subscription.id}/signals`
+);
+
+const data = await response.json();
+```
+
+Legacy direct-buy route still exists for debugging:
 
 ```bash
-# First request returns 402 with payment requirements
 curl -i https://okx-onchainos.vercel.app/api/strategies/{id}/signals
-
-# Agent's x402 wallet handles payment automatically
-# Or manually provide payment header:
-curl https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
-  -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
 ```
 
 #### Research Operations
@@ -192,9 +235,12 @@ RESEARCH_MAX_LIMIT=500
 |--------|------|-------------|
 | GET | `/api/strategies` | List strategies |
 | GET | `/api/strategies/:id` | Strategy details |
-| POST | `/api/strategies` | Create strategy |
+| POST | `/api/strategies` | Create strategy (wallet-signed) |
+| POST | `/api/strategies/:id/subscribe` | Create/reuse subscription (wallet-signed) |
+| GET | `/api/strategies/:id/subscribe?subscriberAddress=...` | Read active subscription |
+| GET | `/api/subscriptions/:subscriptionId/signals` | Poll subscription signals (x402 when pending) |
 | GET | `/api/strategies/:id/signals` | Get signals (x402 paid) |
-| PUT | `/api/strategies/:id/signals` | Push new signal |
+| PUT | `/api/strategies/:id/signals` | Push new signal (wallet-signed) |
 | GET | `/api/providers/:address` | Provider balance |
 | GET | `/api/market/:token` | Token price (OKX proxy) |
 | GET | `/api/research/supported-assets` | Supported OnchainOS assets |
@@ -206,3 +252,5 @@ RESEARCH_MAX_LIMIT=500
 All x402 payments go to the platform wallet. 90% is credited to the strategy provider's balance, 10% is the platform fee.
 
 Research candles payments are separate from strategy signal purchases: each `/api/research/candles` request is priced at `$0.001` and recorded as platform research revenue.
+
+Provider writes and subscription creation are protected by wallet-auth request signatures. A valid x402 payment wallet is also required for paid routes, but the skill itself does not provision or persist that wallet.
