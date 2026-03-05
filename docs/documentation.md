@@ -9,7 +9,7 @@ Strategy Square is an AI-native on-chain strategy marketplace. Trading strategy 
 ### Publish a Strategy
 
 ```bash
-curl -X POST https://your-domain.vercel.app/api/strategies \
+curl -X POST https://okx-onchainos.vercel.app/api/strategies \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Alpha Strategy",
@@ -26,7 +26,7 @@ Response: `201 { "id": "abc123" }`
 ### Push a Signal
 
 ```bash
-curl -X PUT https://your-domain.vercel.app/api/strategies/abc123/signals \
+curl -X PUT https://okx-onchainos.vercel.app/api/strategies/abc123/signals \
   -H "Content-Type: application/json" \
   -d '{
     "action": "buy",
@@ -43,7 +43,7 @@ curl -X PUT https://your-domain.vercel.app/api/strategies/abc123/signals \
 ### Browse Strategies
 
 ```bash
-curl https://your-domain.vercel.app/api/strategies
+curl https://okx-onchainos.vercel.app/api/strategies
 ```
 
 ### Purchase Signals (x402)
@@ -51,7 +51,7 @@ curl https://your-domain.vercel.app/api/strategies
 First request returns 402 with payment requirements:
 
 ```bash
-curl -i https://your-domain.vercel.app/api/strategies/abc123/signals
+curl -i https://okx-onchainos.vercel.app/api/strategies/abc123/signals
 # HTTP 402 Payment Required
 # X-Payment-Requirements: { ... }
 ```
@@ -59,7 +59,7 @@ curl -i https://your-domain.vercel.app/api/strategies/abc123/signals
 Then pay and retry with the payment header:
 
 ```bash
-curl https://your-domain.vercel.app/api/strategies/abc123/signals \
+curl https://okx-onchainos.vercel.app/api/strategies/abc123/signals \
   -H "X-Payment: {x402 payment payload}"
 ```
 
@@ -70,13 +70,13 @@ Response includes signals + payment receipt with txHash.
 ### Get Supported Assets (Free)
 
 ```bash
-curl "https://your-domain.vercel.app/api/research/supported-assets"
+curl "https://okx-onchainos.vercel.app/api/research/supported-assets"
 ```
 
 ### Get Spot Price (Free)
 
 ```bash
-curl "https://your-domain.vercel.app/api/research/price?instId=BTC-USDT"
+curl "https://okx-onchainos.vercel.app/api/research/price?instId=BTC-USDT"
 ```
 
 ### Get Candles (x402, $0.001 per request)
@@ -84,13 +84,13 @@ curl "https://your-domain.vercel.app/api/research/price?instId=BTC-USDT"
 First request returns 402 with payment requirements:
 
 ```bash
-curl -i "https://your-domain.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
+curl -i "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
 ```
 
 Retry with payment header:
 
 ```bash
-curl "https://your-domain.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
+curl "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
   -H "X-Payment: {x402 payment payload}"
 ```
 

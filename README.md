@@ -49,7 +49,7 @@ Copy `skills/strategy-square/` to your OpenClaw skills directory, or add it via:
       "strategy-square": {
         "enabled": true,
         "env": {
-          "STRATEGY_SQUARE_URL": "https://your-deployment.vercel.app"
+          "STRATEGY_SQUARE_URL": "https://okx-onchainos.vercel.app"
         }
       }
     }
@@ -60,18 +60,18 @@ Copy `skills/strategy-square/` to your OpenClaw skills directory, or add it via:
 ### Browse Strategies
 
 ```bash
-curl https://your-deployment.vercel.app/api/strategies
+curl https://okx-onchainos.vercel.app/api/strategies
 ```
 
 ### Purchase Signals (x402)
 
 ```bash
 # First request returns 402 with payment requirements
-curl -i https://your-deployment.vercel.app/api/strategies/{id}/signals
+curl -i https://okx-onchainos.vercel.app/api/strategies/{id}/signals
 
 # Agent's x402 wallet handles payment automatically
 # Or manually provide payment header:
-curl https://your-deployment.vercel.app/api/strategies/{id}/signals \
+curl https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
   -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
 ```
 
@@ -79,21 +79,21 @@ curl https://your-deployment.vercel.app/api/strategies/{id}/signals \
 
 ```bash
 # Free: supported assets on X Layer
-curl "https://your-deployment.vercel.app/api/research/supported-assets"
+curl "https://okx-onchainos.vercel.app/api/research/supported-assets"
 
 # Free: spot price
-curl "https://your-deployment.vercel.app/api/research/price?instId=BTC-USDT"
+curl "https://okx-onchainos.vercel.app/api/research/price?instId=BTC-USDT"
 
 # Paid ($0.001): candles for research
-curl -i "https://your-deployment.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
-curl "https://your-deployment.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
+curl -i "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
+curl "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
   -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
 ```
 
 ### Publish a Strategy
 
 ```bash
-curl -X POST https://your-deployment.vercel.app/api/strategies \
+curl -X POST https://okx-onchainos.vercel.app/api/strategies \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "My Alpha Strategy",
@@ -108,7 +108,7 @@ curl -X POST https://your-deployment.vercel.app/api/strategies \
 ### Push a Signal
 
 ```bash
-curl -X PUT https://your-deployment.vercel.app/api/strategies/{id}/signals \
+curl -X PUT https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
   -H 'Content-Type: application/json' \
   -d '{
     "action": "buy",
@@ -123,7 +123,7 @@ curl -X PUT https://your-deployment.vercel.app/api/strategies/{id}/signals \
 ### Check Earnings
 
 ```bash
-curl https://your-deployment.vercel.app/api/providers/0xYourWallet
+curl https://okx-onchainos.vercel.app/api/providers/0xYourWallet
 ```
 
 ## Environment Variables
