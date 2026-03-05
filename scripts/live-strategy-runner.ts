@@ -6,8 +6,9 @@
  *
  * Optional env:
  *   LIVE_STRATEGY_INST_IDS=BTC-USDT,ETH-USDT,SOL-USDT
- *   LIVE_STRATEGY_BAR=1H
- *   LIVE_STRATEGY_LIMIT=300
+ *   LIVE_STRATEGY_BAR=1D
+ *   LIVE_STRATEGY_LIMIT=180
+ *   LIVE_STRATEGY_MIN_DAYS=90
  */
 
 type Candle = {
@@ -88,6 +89,16 @@ function sma(values: number[], endIndex: number, period: number): number | null 
   return mean(window);
 }
 
+function emaSeries(values: number[], period: number): number[] {
+  if (values.length === 0) return [];
+  const alpha = 2 / (period + 1);
+  const ema: number[] = [values[0]];
+  for (let i = 1; i < values.length; i++) {
+    ema[i] = values[i] * alpha + ema[i - 1] * (1 - alpha);
+  }
+  return ema;
+}
+
 function highest(values: number[], endIndex: number, period: number): number | null {
   const window = windowSlice(values, endIndex, period);
   if (window.length < period) return null;
@@ -114,6 +125,27 @@ function rsi(values: number[], endIndex: number, period: number): number | null 
   if (losses === 0) return 100;
   const rs = gains / losses;
   return 100 - 100 / (1 + rs);
+}
+
+function stochasticK(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  endIndex: number,
+  period: number
+): number | null {
+  const hh = highest(highs, endIndex, period);
+  const ll = lowest(lows, endIndex, period);
+  if (hh === null || ll === null) return null;
+  if (hh === ll) return 50;
+  return ((closes[endIndex] - ll) / (hh - ll)) * 100;
+}
+
+function roc(values: number[], endIndex: number, period: number): number | null {
+  if (endIndex < period) return null;
+  const prev = values[endIndex - period];
+  if (prev === 0) return null;
+  return ((values[endIndex] - prev) / prev) * 100;
 }
 
 function backtest(
@@ -159,6 +191,10 @@ function runStrategies(candles: Candle[]): StrategyResult[] {
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
   const last = candles.length - 1;
+  const ema12 = emaSeries(closes, 12);
+  const ema26 = emaSeries(closes, 26);
+  const macdLine = closes.map((_, i) => ema12[i] - ema26[i]);
+  const macdSignal = emaSeries(macdLine, 9);
 
   const results: StrategyResult[] = [];
 
@@ -199,6 +235,30 @@ function runStrategies(candles: Candle[]): StrategyResult[] {
   }
 
   {
+    const fast = 12;
+    const slow = 26;
+    const minLookback = slow;
+    const signalFn = (index: number): StrategySignal => {
+      if (index <= 0) return 0;
+      const fastPrev = ema12[index - 1];
+      const slowPrev = ema26[index - 1];
+      const fastNow = ema12[index];
+      const slowNow = ema26[index];
+      if (fastPrev <= slowPrev && fastNow > slowNow) return 1;
+      if (fastPrev >= slowPrev && fastNow < slowNow) return -1;
+      return 0;
+    };
+    const signal = signalFn(last);
+    const perf = backtest(candles, minLookback, signalFn);
+    results.push({
+      name: "EMA Crossover (12/26)",
+      signal: toLabel(signal),
+      detail: `EMA12=${round(ema12[last], 2)} | EMA26=${round(ema26[last], 2)}`,
+      ...perf,
+    });
+  }
+
+  {
     const period = 14;
     const minLookback = period + 1;
     const signalFn = (index: number): StrategySignal => {
@@ -215,6 +275,28 @@ function runStrategies(candles: Candle[]): StrategyResult[] {
       name: "RSI Reversion (14, 30/70)",
       signal: toLabel(signal),
       detail: rsiNow !== null ? `RSI=${round(rsiNow, 2)}` : "insufficient candles",
+      ...perf,
+    });
+  }
+
+  {
+    const minLookback = 35;
+    const signalFn = (index: number): StrategySignal => {
+      if (index <= 0) return 0;
+      const prevMacd = macdLine[index - 1];
+      const prevSig = macdSignal[index - 1];
+      const currMacd = macdLine[index];
+      const currSig = macdSignal[index];
+      if (prevMacd <= prevSig && currMacd > currSig) return 1;
+      if (prevMacd >= prevSig && currMacd < currSig) return -1;
+      return 0;
+    };
+    const signal = signalFn(last);
+    const perf = backtest(candles, minLookback, signalFn);
+    results.push({
+      name: "MACD Cross (12,26,9)",
+      signal: toLabel(signal),
+      detail: `MACD=${round(macdLine[last], 3)} | Signal=${round(macdSignal[last], 3)}`,
       ...perf,
     });
   }
@@ -252,6 +334,48 @@ function runStrategies(candles: Candle[]): StrategyResult[] {
       name: "Bollinger Reversion (20, 2)",
       signal: toLabel(signal),
       detail,
+      ...perf,
+    });
+  }
+
+  {
+    const period = 14;
+    const minLookback = period;
+    const signalFn = (index: number): StrategySignal => {
+      const k = stochasticK(highs, lows, closes, index, period);
+      if (k === null) return 0;
+      if (k < 20) return 1;
+      if (k > 80) return -1;
+      return 0;
+    };
+    const k = stochasticK(highs, lows, closes, last, period);
+    const signal = signalFn(last);
+    const perf = backtest(candles, minLookback, signalFn);
+    results.push({
+      name: "Stochastic Reversion (14,20/80)",
+      signal: toLabel(signal),
+      detail: k !== null ? `%K=${round(k, 2)}` : "insufficient candles",
+      ...perf,
+    });
+  }
+
+  {
+    const period = 10;
+    const minLookback = period + 1;
+    const signalFn = (index: number): StrategySignal => {
+      const v = roc(closes, index, period);
+      if (v === null) return 0;
+      if (v > 2) return 1;
+      if (v < -2) return -1;
+      return 0;
+    };
+    const v = roc(closes, last, period);
+    const signal = signalFn(last);
+    const perf = backtest(candles, minLookback, signalFn);
+    results.push({
+      name: "ROC Momentum (10, +/-2%)",
+      signal: toLabel(signal),
+      detail: v !== null ? `ROC10=${round(v, 2)}%` : "insufficient candles",
       ...perf,
     });
   }
@@ -404,12 +528,13 @@ async function main() {
     .split(",")
     .map((x) => x.trim().toUpperCase())
     .filter(Boolean);
-  const bar = (process.env.LIVE_STRATEGY_BAR ?? "1H").trim();
-  const limit = Math.max(100, Math.min(1000, parseNumber(process.env.LIVE_STRATEGY_LIMIT ?? "300")));
+  const bar = (process.env.LIVE_STRATEGY_BAR ?? "1D").trim();
+  const limit = Math.max(100, Math.min(1000, parseNumber(process.env.LIVE_STRATEGY_LIMIT ?? "180")));
+  const minDays = Math.max(30, parseNumber(process.env.LIVE_STRATEGY_MIN_DAYS ?? "90"));
 
   console.log("=== Live Strategy Runner (OKX) ===");
   console.log(`Instruments: ${instIds.join(", ")}`);
-  console.log(`Bar: ${bar} | Limit: ${limit}`);
+  console.log(`Bar: ${bar} | Limit: ${limit} | MinDays: ${minDays}`);
   console.log("");
 
   await fetchOnchainSupported();
@@ -419,17 +544,34 @@ async function main() {
     try {
       const candles = await fetchCandles(instId, bar, limit);
       const last = candles[candles.length - 1];
+      const first = candles[0];
+      const coverageDays = (last.ts - first.ts) / (24 * 60 * 60 * 1000);
+      if (coverageDays < minDays) {
+        throw new Error(
+          `insufficient coverage: ${round(coverageDays, 1)} days (need >= ${minDays})`
+        );
+      }
+
       const results = runStrategies(candles);
+      const ranked = [...results].sort(
+        (a, b) => b.cumulativeReturnPct - a.cumulativeReturnPct
+      );
 
       console.log(`--- ${instId} ---`);
       console.log(
-        `Last close: ${round(last.close, 2)} | Last candle: ${new Date(last.ts).toISOString()}`
+        `Coverage: ${round(coverageDays, 1)} days | Last close: ${round(last.close, 2)} | Last candle: ${new Date(last.ts).toISOString()}`
       );
       for (const r of results) {
         const perf = `trades=${r.trades}, win=${r.winRatePct}%, avg=${r.avgReturnPct}%, cum=${r.cumulativeReturnPct}%`;
         console.log(`- ${r.name}`);
         console.log(`  signal=${r.signal} | ${r.detail}`);
         console.log(`  backtest(${bar}, next-candle) => ${perf}`);
+      }
+      console.log("Top performers:");
+      for (const r of ranked.slice(0, 3)) {
+        console.log(
+          `  - ${r.name}: cum=${r.cumulativeReturnPct}% | win=${r.winRatePct}% | signal=${r.signal}`
+        );
       }
       console.log("");
     } catch (error) {
