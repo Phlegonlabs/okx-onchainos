@@ -37,7 +37,7 @@ DEMO_AGENT_ADDRESS=0xYourDemoAgentAddress
 |----------|----------|---------|-------------|
 | `TURSO_DATABASE_URL` | Production only | `src/db/client.ts`, `src/db/seed.ts` | Turso database URL. Falls back to `file:local.db` for local dev. |
 | `TURSO_AUTH_TOKEN` | Production only | `src/db/client.ts`, `src/db/seed.ts` | Turso auth token. Not needed for local dev. |
-| `OKX_API_KEY` | Yes | `src/lib/okx-auth.ts`, `src/lib/x402.ts` | OKX API key. Used for x402 verify (Bearer token) and settle (HMAC signing). |
+| `OKX_API_KEY` | Yes | `src/lib/okx-auth.ts`, `src/lib/x402.ts` | OKX API key. Used in `OK-ACCESS-KEY` header for x402 verify and settle. |
 | `OKX_SECRET_KEY` | Yes | `src/lib/okx-auth.ts` | OKX secret key. Used for HMAC-SHA256 signature generation. |
 | `OKX_PASSPHRASE` | Yes | `src/lib/okx-auth.ts` | OKX API passphrase. Set when creating the API key. |
 | `OKX_PROJECT_ID` | Yes | `src/lib/okx-auth.ts` | OKX project ID from developer portal. |
@@ -101,8 +101,9 @@ Generate a fresh wallet:
 npx tsx scripts/generate-wallet.ts
 ```
 
-Then fund it with a small amount of USDC on X Layer:
-- Open OKX Exchange → Withdraw → USDC → Network: **X Layer**
+Then fund it with a small amount of USDT (USD₮0) on X Layer:
+- Token address: `0x779ded0c9e1022225f8e0630b35a9b54be713736`
+- Open OKX Exchange → Withdraw → USDT → Network: **X Layer**
 - Send to the generated address
 - $1 is enough for many demo transactions
 

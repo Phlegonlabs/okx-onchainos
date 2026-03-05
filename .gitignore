@@ -17,6 +17,7 @@
 
 # debug
 npm-debug.log*
+/.tmp/
 
 # env files
 .env*.local

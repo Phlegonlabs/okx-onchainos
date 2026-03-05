@@ -67,8 +67,8 @@
 - Commit Boundary: exactly one atomic commit
 
 #### M3-T2: x402 verify + settle helpers
-- Implement `verifyPayment()` calling POST /api/v6/payments/verify
-- Implement `settlePayment()` calling POST /api/v6/payments/settle
+- Implement `verifyPayment()` calling POST /api/v6/x402/verify
+- Implement `settlePayment()` calling POST /api/v6/x402/settle
 - Build paymentRequirements object generator
 - Commit Boundary: exactly one atomic commit
 

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 
-const inter = Inter({
+const geist = Geist({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-body",
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 });
@@ -31,47 +32,55 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body
-        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}
-      >
-        <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 px-6 py-3 backdrop-blur-md">
+      <body className={`${geist.variable} ${geistMono.variable} antialiased`}>
+        <nav className="sticky top-0 z-50 border-b border-zinc-800 bg-black/75 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="mx-auto flex max-w-6xl items-center justify-between">
-            <a href="/" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-                S
+            <Link href="/" className="group flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-xs font-semibold text-zinc-100">
+                SS
               </div>
-              <span className="text-lg font-semibold text-zinc-50">
-                Strategy Square
-              </span>
-            </a>
-            <div className="flex items-center gap-4">
-              <a
+              <div>
+                <p className="display-font text-base font-semibold leading-none text-zinc-50">
+                  Strategy Square
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                  Agent Market on X Layer
+                </p>
+              </div>
+            </Link>
+
+            <div className="flex items-center gap-4 sm:gap-5">
+              <Link
                 href="/"
-                className="text-sm text-zinc-400 transition-colors hover:text-zinc-200"
+                className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
               >
                 Marketplace
-              </a>
+              </Link>
               <a
                 href="https://github.com/Phlegonlabs/okx-onchainos"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-zinc-400 transition-colors hover:text-zinc-200"
+                className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
               >
                 GitHub
               </a>
-              <span className="rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-500">
-                Powered by OKX OnchainOS
+              <span className="hidden rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-[11px] text-zinc-300 sm:inline-flex">
+                Powered by x402
               </span>
             </div>
           </div>
         </nav>
-        <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-        <footer className="border-t border-zinc-900 px-6 py-6">
+
+        <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-10 sm:px-6">
+          {children}
+        </main>
+
+        <footer className="border-t border-zinc-900 px-4 py-6 sm:px-6">
           <div className="mx-auto flex max-w-6xl items-center justify-between">
-            <p className="text-xs text-zinc-600">
-              Strategy Square &mdash; OKX OnchainOS Hackathon 2026
+            <p className="text-xs text-zinc-500">
+              Strategy Square | OKX OnchainOS Hackathon 2026
             </p>
-            <div className="flex items-center gap-3 text-xs text-zinc-600">
+            <div className="mono-font flex items-center gap-3 text-[11px] text-zinc-600">
               <span>x402 Payments</span>
               <span>&middot;</span>
               <span>X Layer</span>

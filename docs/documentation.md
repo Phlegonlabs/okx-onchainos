@@ -68,5 +68,5 @@ Response includes signals + payment receipt with txHash.
 ## Supported Payment
 
 - Network: X Layer (zero gas fees)
-- Assets: USDC, USDT, USDG
+- Asset: USDT (USD₮0), contract `0x779ded0c9e1022225f8e0630b35a9b54be713736`
 - Protocol: x402 v1

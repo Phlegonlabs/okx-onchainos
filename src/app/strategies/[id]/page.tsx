@@ -37,91 +37,105 @@ export default async function StrategyDetail({
   );
 
   return (
-    <div>
+    <div className="space-y-6">
       <Link
         href="/"
-        className="mb-6 inline-flex items-center text-sm text-zinc-500 hover:text-zinc-300"
+        className="mono-font inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
       >
         &larr; Back to marketplace
       </Link>
 
-      <div className="mb-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <div className="flex items-start justify-between">
+      <section className="surface-card relative overflow-hidden rounded-3xl p-6 sm:p-8">
+        <div className="pointer-events-none absolute -right-10 top-0 h-44 w-44 rounded-full bg-white/10 blur-3xl" />
+
+        <div className="grid gap-8 lg:grid-cols-[1.35fr_1fr]">
           <div>
-            <h1 className="text-2xl font-semibold text-zinc-50">
+            <p className="mono-font text-xs uppercase tracking-[0.2em] text-zinc-500">
+              Strategy Profile
+            </p>
+            <h1 className="display-font mt-3 text-3xl font-semibold text-zinc-50 sm:text-4xl">
               {strategy.name}
             </h1>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-400">
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
                 {strategy.asset}
               </span>
-              <span className="text-xs text-zinc-500">
+              <span className="mono-font text-xs text-zinc-500">
                 {strategy.timeframe}
               </span>
               <span className="text-xs text-zinc-600">&middot;</span>
-              <span className="font-mono text-xs text-zinc-400">
+              <span className="mono-font text-xs text-zinc-300">
                 ${((strategy.pricePerSignal || 0) / 100).toFixed(2)} per signal
               </span>
+            </div>
+
+            <p className="mt-5 text-sm leading-relaxed text-zinc-400">
+              {strategy.description}
+            </p>
+
+            <div className="mt-5">
+              <Link
+                href={`/providers/${strategy.providerAddress}`}
+                className="mono-font inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
+              >
+                Provider {strategy.providerAddress?.slice(0, 8)}...
+                {strategy.providerAddress?.slice(-6)}
+              </Link>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <MarketPrice token={strategy.asset.split("/")[0]} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+              <StatBox
+                label="Win Rate"
+                value={`${((strategy.winRate || 0) * 100).toFixed(0)}%`}
+                color={(strategy.winRate || 0) >= 0.6 ? "green" : "yellow"}
+              />
+              <StatBox
+                label="Avg Return"
+                value={`${(strategy.avgReturn || 0) > 0 ? "+" : ""}${(strategy.avgReturn || 0).toFixed(1)}%`}
+                color={(strategy.avgReturn || 0) > 0 ? "green" : "red"}
+              />
+              <StatBox
+                label="Signals"
+                value={String(strategy.totalSignals || 0)}
+                color="blue"
+              />
+              <StatBox label="W / L" value={`${wins} / ${losses}`} color="zinc" />
             </div>
           </div>
         </div>
 
-        <p className="mt-4 text-sm text-zinc-400">{strategy.description}</p>
-
-        <div className="mt-4">
-          <MarketPrice token={strategy.asset.split("/")[0]} />
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatBox
-            label="Win Rate"
-            value={`${((strategy.winRate || 0) * 100).toFixed(0)}%`}
-            color={(strategy.winRate || 0) >= 0.6 ? "green" : "yellow"}
-          />
-          <StatBox
-            label="Avg Return"
-            value={`${(strategy.avgReturn || 0) > 0 ? "+" : ""}${(strategy.avgReturn || 0).toFixed(1)}%`}
-            color={(strategy.avgReturn || 0) > 0 ? "green" : "red"}
-          />
-          <StatBox
-            label="Total Signals"
-            value={String(strategy.totalSignals || 0)}
-            color="blue"
-          />
-          <StatBox
-            label="W / L"
-            value={`${wins} / ${losses}`}
-            color="zinc"
-          />
-        </div>
-
-        <div className="mt-4 rounded-lg bg-zinc-800/50 p-3">
-          <p className="text-xs text-zinc-500">
-            Cumulative Return:{" "}
-            <span
-              className={`font-mono font-medium ${totalReturn > 0 ? "text-green-500" : "text-red-500"}`}
-            >
-              {totalReturn > 0 ? "+" : ""}
-              {totalReturn.toFixed(1)}%
-            </span>
+        <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+            Cumulative Return
           </p>
-          <p className="mt-1 font-mono text-xs text-zinc-600">
-            Provider: {strategy.providerAddress?.slice(0, 10)}...
-            {strategy.providerAddress?.slice(-8)}
+          <p
+            className={`mono-font mt-1 text-2xl font-semibold ${totalReturn > 0 ? "text-zinc-100" : "text-rose-400"}`}
+          >
+            {totalReturn > 0 ? "+" : ""}
+            {totalReturn.toFixed(1)}%
           </p>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-50">
-          Signal History
-        </h2>
+      <section className="surface-card rounded-3xl p-5 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="display-font text-2xl font-semibold text-zinc-50">
+            Signal History
+          </h2>
+          <span className="mono-font rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+            {allSignals.length} entries
+          </span>
+        </div>
         {allSignals.length > 0 ? (
           <SignalTable signals={allSignals} />
         ) : (
-          <p className="text-sm text-zinc-500">No signals yet.</p>
+          <p className="text-sm text-zinc-400">No signals yet.</p>
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -136,17 +150,17 @@ function StatBox({
   color: string;
 }) {
   const colorMap: Record<string, string> = {
-    green: "text-green-500",
-    red: "text-red-500",
-    yellow: "text-yellow-500",
-    blue: "text-blue-400",
-    zinc: "text-zinc-300",
+    green: "text-zinc-100",
+    red: "text-rose-400",
+    yellow: "text-zinc-200",
+    blue: "text-zinc-300",
+    zinc: "text-zinc-100",
   };
 
   return (
-    <div className="rounded-lg bg-zinc-800/50 p-3">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`mt-1 font-mono text-lg font-medium ${colorMap[color]}`}>
+    <div className="metric-tile rounded-2xl p-3">
+      <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">{label}</p>
+      <p className={`mono-font mt-1 text-xl font-semibold ${colorMap[color]}`}>
         {value}
       </p>
     </div>

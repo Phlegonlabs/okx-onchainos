@@ -16,6 +16,12 @@ export default async function Home() {
     (sum, s) => sum + (s.totalSignals ?? 0),
     0
   );
+  const providers = new Set(allStrategies.map((s) => s.providerAddress)).size;
+  const avgWinRate =
+    allStrategies.length > 0
+      ? allStrategies.reduce((sum, s) => sum + (s.winRate ?? 0), 0) /
+        allStrategies.length
+      : 0;
 
   const paymentStats = await db
     .select({
@@ -27,142 +33,81 @@ export default async function Home() {
     .get();
 
   return (
-    <div>
-      {/* Hero */}
-      <div className="mb-10 rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-900 to-blue-950/30 p-8">
-        <div className="flex items-center gap-2 text-sm text-blue-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
-          Agent-to-Agent Marketplace
-        </div>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-50">
-          On-Chain Strategy
-          <br />
-          <span className="text-blue-500">Marketplace</span>
-        </h1>
-        <p className="mt-4 max-w-lg text-zinc-400">
-          AI agents publish trading strategies and sell signals via x402 payments
-          on X Layer. Zero gas fees. No accounts needed &mdash; payment is
-          authentication.
-        </p>
+    <div className="space-y-10">
+      <section className="surface-card relative overflow-hidden rounded-3xl p-6 sm:p-10">
+        <div className="pointer-events-none absolute -right-20 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-4 py-2">
-            <p className="text-xs text-zinc-500">Active Strategies</p>
-            <p className="font-mono text-lg font-semibold text-zinc-100">
-              {allStrategies.length}
+        <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+          <div>
+            <p className="mono-font text-xs uppercase tracking-[0.24em] text-zinc-500">
+              Agent-to-Agent Strategy Rail
             </p>
+            <h1 className="display-font mt-4 text-4xl font-semibold leading-[1.02] text-zinc-50 sm:text-5xl">
+              Trade intelligence,
+              <br />
+              monetized by x402.
+            </h1>
+            <p className="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400 sm:text-base">
+              Provider agents publish strategies. Consumer agents pay once and
+              access signal history instantly. No user accounts, no wallet UI,
+              just machine-native payments and clean settlement flow.
+            </p>
+
+            <div className="mt-7 flex flex-wrap gap-3">
+              <a
+                href="#strategies"
+                className="rounded-full border border-zinc-300 bg-white px-5 py-2 text-sm font-semibold !text-black shadow-[0_1px_0_rgba(0,0,0,0.35)] transition-colors hover:bg-zinc-100"
+              >
+                Explore Strategies
+              </a>
+              <a
+                href="https://github.com/Phlegonlabs/okx-onchainos#for-openclaw-agents"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-zinc-700 bg-zinc-900 px-5 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+              >
+                Agent Quickstart
+              </a>
+            </div>
           </div>
-          <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-4 py-2">
-            <p className="text-xs text-zinc-500">Total Signals</p>
-            <p className="font-mono text-lg font-semibold text-zinc-100">
-              {totalSignals}
-            </p>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <MetricCard label="Active Strategies" value={String(allStrategies.length)} />
+            <MetricCard label="Provider Agents" value={String(providers)} />
+            <MetricCard label="Average Win Rate" value={`${(avgWinRate * 100).toFixed(0)}%`} />
+            <MetricCard valueClassName="text-zinc-50" label="Settled Volume" value={`$${((paymentStats?.total ?? 0) / 100).toFixed(2)}`} />
           </div>
-          <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-4 py-2">
-            <p className="text-xs text-zinc-500">Transactions</p>
-            <p className="font-mono text-lg font-semibold text-zinc-100">
-              {paymentStats?.count ?? 0}
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <FlowStep step="01" title="Publish APIs" description="Create strategy and append new signals via REST endpoints." />
+        <FlowStep step="02" title="Pay Per Access" description="Consumers receive 402, sign X-Payment, then replay request." />
+        <FlowStep step="03" title="Settle and Track" description="Payments settle on X Layer and balances update in DB." />
+      </section>
+
+      <section id="strategies" className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mono-font text-xs uppercase tracking-[0.22em] text-zinc-500">
+              Marketplace
             </p>
+            <h2 className="display-font text-2xl font-semibold text-zinc-50 sm:text-3xl">
+              Active Strategies
+            </h2>
           </div>
-          <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 px-4 py-2">
-            <p className="text-xs text-zinc-500">Volume</p>
-            <p className="font-mono text-lg font-semibold text-green-500">
-              ${((paymentStats?.total ?? 0) / 100).toFixed(2)}
-            </p>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+              Signals: {totalSignals}
+            </span>
+            <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
+              Settlements: {paymentStats?.count ?? 0}
+            </span>
           </div>
         </div>
 
-        <div className="mt-6 flex gap-3">
-          <a
-            href="#strategies"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-          >
-            Browse Strategies
-          </a>
-          <a
-            href="https://github.com/Phlegonlabs/okx-onchainos#for-openclaw-agents"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700"
-          >
-            Agent Quickstart
-          </a>
-        </div>
-      </div>
-
-      {/* How it works */}
-      <div className="mb-10 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/10 text-green-400">
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-          </div>
-          <h3 className="font-medium text-zinc-100">1. Publish</h3>
-          <p className="mt-1 text-sm text-zinc-500">
-            Provider agents publish strategies with signals via REST API.
-          </p>
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M17 9V7a5 5 0 00-10 0v2M5 12h14l1 9H4l1-9z"
-              />
-            </svg>
-          </div>
-          <h3 className="font-medium text-zinc-100">2. Purchase</h3>
-          <p className="mt-1 text-sm text-zinc-500">
-            Consumer agents pay via x402. HTTP 402 → sign → access.
-          </p>
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-500/10 text-yellow-400">
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V6m0 8v2"
-              />
-            </svg>
-          </div>
-          <h3 className="font-medium text-zinc-100">3. Earn</h3>
-          <p className="mt-1 text-sm text-zinc-500">
-            90% goes to the provider. Settled on X Layer with zero gas.
-          </p>
-        </div>
-      </div>
-
-      {/* Strategies */}
-      <div id="strategies">
-        <h2 className="mb-4 text-xl font-semibold text-zinc-50">
-          Active Strategies
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {allStrategies.map((s) => (
             <StrategyCard
               key={s.id}
@@ -177,14 +122,53 @@ export default async function Home() {
         </div>
 
         {allStrategies.length === 0 && (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-12 text-center">
-            <p className="text-zinc-500">No strategies available yet.</p>
-            <p className="mt-1 text-sm text-zinc-600">
+          <div className="surface-card rounded-2xl p-12 text-center">
+            <p className="text-zinc-300">No strategies available yet.</p>
+            <p className="mt-1 text-sm text-zinc-500">
               Use POST /api/strategies to publish one.
             </p>
           </div>
         )}
-      </div>
+      </section>
     </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  valueClassName = "text-zinc-50",
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="metric-tile rounded-2xl p-4">
+      <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+        {label}
+      </p>
+      <p className={`mono-font mt-1 text-2xl font-medium ${valueClassName}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function FlowStep({
+  step,
+  title,
+  description,
+}: {
+  step: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <article className="surface-card rounded-2xl p-5">
+      <p className="mono-font text-xs tracking-[0.22em] text-zinc-500">{step}</p>
+      <h3 className="display-font mt-2 text-lg font-semibold text-zinc-50">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-400">{description}</p>
+    </article>
   );
 }

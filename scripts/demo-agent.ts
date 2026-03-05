@@ -39,18 +39,12 @@ const xLayer = defineChain({
   },
 });
 
-const KNOWN_ASSET_SYMBOLS: Record<string, string> = {
-  "0x74b7f16337b8972027f6196a17a631ac6de26d22": "USDC",
-  "0x1e4a5963abfd975d8c9021ce480b42188849d41d": "USDT",
-  "0x779ded0c9e1022225f8e0630b35a9b54be713736": "USDT",
-};
-
 const publicClient = createPublicClient({
   chain: xLayer,
   transport: http(),
 });
 
-async function resolveEip712Domain(assetAddress: `0x${string}`) {
+async function resolveTokenMetadata(assetAddress: `0x${string}`) {
   const tokenAbi = [
     {
       type: "function",
@@ -62,6 +56,13 @@ async function resolveEip712Domain(assetAddress: `0x${string}`) {
     {
       type: "function",
       name: "version",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "string" }],
+    },
+    {
+      type: "function",
+      name: "symbol",
       stateMutability: "view",
       inputs: [],
       outputs: [{ type: "string" }],
@@ -86,7 +87,16 @@ async function resolveEip712Domain(assetAddress: `0x${string}`) {
     });
   } catch {}
 
-  return { name, version };
+  let symbol = "TOKEN";
+  try {
+    symbol = await publicClient.readContract({
+      address: assetAddress,
+      abi: tokenAbi,
+      functionName: "symbol",
+    });
+  } catch {}
+
+  return { name, version, symbol };
 }
 
 const BASE_URL = process.env.STRATEGY_SQUARE_URL || "http://localhost:3456";
@@ -130,7 +140,8 @@ async function run() {
   if (signalRes.status === 402) {
     const body = await signalRes.json();
     const reqs = body.paymentRequirements;
-    const assetLabel = KNOWN_ASSET_SYMBOLS[(reqs.asset || "").toLowerCase()] || "TOKEN";
+    const tokenMetadata = await resolveTokenMetadata(reqs.asset as `0x${string}`);
+    const assetLabel = tokenMetadata.symbol;
     console.log("  Payment Required:");
     console.log(`    Amount: ${reqs.maxAmountRequired} (${assetLabel} decimals)`);
     console.log(`    Pay to: ${reqs.payTo}`);
@@ -159,10 +170,9 @@ async function run() {
     };
 
     // Sign the authorization using EIP-712
-    const eip712Domain = await resolveEip712Domain(reqs.asset as `0x${string}`);
     const domain = {
-      name: eip712Domain.name,
-      version: eip712Domain.version,
+      name: tokenMetadata.name,
+      version: tokenMetadata.version,
       chainId: BigInt(196),
       verifyingContract: reqs.asset as `0x${string}`,
     };
@@ -236,16 +246,10 @@ async function run() {
       console.log("  Response:", JSON.stringify(result, null, 2));
       console.log("");
       if (paidRes.status === 403 || paidRes.status === 500) {
-        console.log("  This is expected if OKX API keys are not configured.");
-        console.log("  The x402 flow is working correctly:");
-        console.log("    1. GET /signals → 402 Payment Required");
-        console.log("    2. Agent signed EIP-3009 authorization");
-        console.log("    3. Agent retried with X-Payment header");
-        console.log("    4. Server attempted OKX verify/settle (failed: no API keys)");
-        console.log("");
-        console.log("  To complete with real payment:");
+        console.log("  x402 payment failed. Check the following:");
         console.log("    - Set OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSPHRASE in .env.local");
         console.log(`    - Fund the agent wallet with ${assetLabel} on X Layer`);
+        console.log("    - Ensure this token is supported by OKX x402 on chainIndex 196");
       }
     }
   } else {

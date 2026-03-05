@@ -42,7 +42,7 @@ GET {STRATEGY_SQUARE_URL}/api/strategies/{id}/signals
 
 First request returns HTTP 402 with payment requirements. Your x402 payment provider (Claw402 or built-in wallet) will automatically handle the payment flow:
 1. Read payment requirements from the 402 response
-2. Sign the USDC transfer authorization on X Layer
+2. Sign the USDT (USD₮0) transfer authorization on X Layer
 3. Retry request with `X-Payment` header
 
 After payment, response: `{ signals: [...], receipt: { txHash, paidAmount, providerCredited, platformFee } }`
@@ -90,7 +90,7 @@ Response: `{ balance: { totalEarnedCents, pendingCents, totalSignalsSold }, stra
 ## Payment Details
 
 - Network: X Layer (zero gas fees)
-- Assets: USDC
+- Asset: USDT (USD₮0), contract `0x779ded0c9e1022225f8e0630b35a9b54be713736`
 - Protocol: x402 v1
 - Platform fee: 10% (90% goes to strategy provider)
 - No API key or account needed — payment is authentication
