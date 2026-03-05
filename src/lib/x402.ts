@@ -1,9 +1,14 @@
 import { createOkxHeaders } from "./okx-auth";
 
 const OKX_BASE = "https://web3.okx.com";
+const VERIFY_PATH = "/api/v6/x402/verify";
+const SETTLE_PATH = "/api/v6/x402/settle";
+const XLAYER_CHAIN_INDEX = "196";
+const XLAYER_USDT_ADDRESS = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
 
 export interface PaymentRequirements {
   x402Version: string;
+  chainIndex: string | number;
   scheme: string;
   maxAmountRequired: string;
   payTo: string;
@@ -15,6 +20,7 @@ export interface PaymentRequirements {
 
 export interface PaymentPayload {
   x402Version: string;
+  chainIndex: string | number;
   scheme: string;
   payload: {
     signature: string;
@@ -41,72 +47,153 @@ interface SettleResult {
   errorMsg: string | null;
 }
 
+interface OkxApiResponse {
+  code?: string;
+  msg?: string;
+  data?: unknown[];
+}
+
+function normalizeChainIndex(
+  paymentPayload: PaymentPayload,
+  paymentRequirements: PaymentRequirements
+): string {
+  const fromPayload = String(paymentPayload.chainIndex ?? "").trim();
+  if (fromPayload) return fromPayload;
+
+  const fromRequirements = String(paymentRequirements.chainIndex ?? "").trim();
+  if (fromRequirements) return fromRequirements;
+
+  return XLAYER_CHAIN_INDEX;
+}
+
+async function parseOkxResponse(
+  res: Response
+): Promise<OkxApiResponse & { fallbackMsg?: string }> {
+  const text = await res.text();
+  if (!text) {
+    return {
+      fallbackMsg: `HTTP ${res.status} ${res.statusText || ""}`.trim(),
+    };
+  }
+
+  try {
+    return JSON.parse(text) as OkxApiResponse;
+  } catch {
+    return {
+      fallbackMsg: `HTTP ${res.status} ${res.statusText || ""}: ${text}`.trim(),
+    };
+  }
+}
+
 export async function verifyPayment(
   paymentPayload: PaymentPayload,
   paymentRequirements: PaymentRequirements
 ): Promise<VerifyResult> {
+  const chainIndex = normalizeChainIndex(paymentPayload, paymentRequirements);
   const body = JSON.stringify({
     x402Version: paymentPayload.x402Version,
-    paymentPayload,
-    paymentRequirements,
-  });
-
-  const res = await fetch(`${OKX_BASE}/api/v6/payments/verify`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OKX_API_KEY}`,
+    chainIndex,
+    paymentPayload: {
+      ...paymentPayload,
+      chainIndex,
     },
-    body,
+    paymentRequirements: {
+      ...paymentRequirements,
+      chainIndex,
+    },
   });
 
-  const json = await res.json();
+  try {
+    const headers = createOkxHeaders("POST", VERIFY_PATH, body);
+    const res = await fetch(`${OKX_BASE}${VERIFY_PATH}`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const json = await parseOkxResponse(res);
 
-  if (json.code !== "0" || !json.data?.[0]) {
+    if (!res.ok || json.code !== "0" || !json.data?.[0]) {
+      return {
+        isValid: false,
+        invalidReason: json.msg || json.fallbackMsg || "Verification failed",
+        payer: "",
+      };
+    }
+
+    return json.data[0] as VerifyResult;
+  } catch (error) {
     return {
       isValid: false,
-      invalidReason: json.msg || "Verification failed",
+      invalidReason: error instanceof Error ? error.message : "Verification failed",
       payer: "",
     };
   }
-
-  return json.data[0] as VerifyResult;
 }
 
 export async function settlePayment(
   paymentPayload: PaymentPayload,
   paymentRequirements: PaymentRequirements
 ): Promise<SettleResult> {
-  const requestPath = "/api/v6/payments/settle";
+  const chainIndex = normalizeChainIndex(paymentPayload, paymentRequirements);
   const body = JSON.stringify({
     x402Version: paymentPayload.x402Version,
-    paymentPayload,
-    paymentRequirements,
+    chainIndex,
+    paymentPayload: {
+      ...paymentPayload,
+      chainIndex,
+    },
+    paymentRequirements: {
+      ...paymentRequirements,
+      chainIndex,
+    },
   });
 
-  const headers = createOkxHeaders("POST", requestPath, body);
+  try {
+    const headers = createOkxHeaders("POST", SETTLE_PATH, body);
+    const res = await fetch(`${OKX_BASE}${SETTLE_PATH}`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const json = await parseOkxResponse(res);
 
-  const res = await fetch(`${OKX_BASE}${requestPath}`, {
-    method: "POST",
-    headers,
-    body,
-  });
+    if (!res.ok || json.code !== "0" || !json.data?.[0]) {
+      return {
+        success: false,
+        txHash: "",
+        errorMsg: json.msg || json.fallbackMsg || "Settlement failed",
+      };
+    }
 
-  const json = await res.json();
+    const settleData = json.data[0] as {
+      success?: boolean;
+      txHash?: string | null;
+      errorMsg?: string | null;
+      errorReason?: string | null;
+    };
+    const success = Boolean(settleData.success);
+    const reason = settleData.errorMsg || settleData.errorReason || null;
 
-  if (json.code !== "0" || !json.data?.[0]) {
+    if (!success) {
+      return {
+        success: false,
+        txHash: "",
+        errorMsg: reason || "Settlement rejected by OKX (no reason provided)",
+      };
+    }
+
+    return {
+      success: true,
+      txHash: String(settleData.txHash || ""),
+      errorMsg: null,
+    };
+  } catch (error) {
     return {
       success: false,
       txHash: "",
-      errorMsg: json.msg || "Settlement failed",
+      errorMsg: error instanceof Error ? error.message : "Settlement failed",
     };
   }
-
-  return {
-    success: json.data[0].success,
-    txHash: json.data[0].txHash || "",
-    errorMsg: json.data[0].errorMsg || null,
-  };
 }
 
 export function buildPaymentRequirements(
@@ -116,10 +203,11 @@ export function buildPaymentRequirements(
 ): PaymentRequirements {
   return {
     x402Version: "1",
+    chainIndex: XLAYER_CHAIN_INDEX,
     scheme: "exact",
     maxAmountRequired: String(pricePerSignalCents * 10000),
     payTo: process.env.PLATFORM_WALLET_ADDRESS || "",
-    asset: "0x74b7f16337b8972027f6196a17a631ac6de26d22", // USDC on X Layer
+    asset: XLAYER_USDT_ADDRESS, // USDT on X Layer
     resource: `/api/strategies/${strategyId}/signals`,
     description: `Access signals for strategy: ${strategyName}`,
     mimeType: "application/json",

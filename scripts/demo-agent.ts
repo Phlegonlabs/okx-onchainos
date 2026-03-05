@@ -25,7 +25,7 @@ try {
   }
 } catch {}
 
-import { createWalletClient, http, encodePacked, keccak256 } from "viem";
+import { createPublicClient, http, encodePacked, keccak256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { defineChain } from "viem";
 
@@ -38,6 +38,56 @@ const xLayer = defineChain({
     default: { http: ["https://rpc.xlayer.tech"] },
   },
 });
+
+const KNOWN_ASSET_SYMBOLS: Record<string, string> = {
+  "0x74b7f16337b8972027f6196a17a631ac6de26d22": "USDC",
+  "0x1e4a5963abfd975d8c9021ce480b42188849d41d": "USDT",
+  "0x779ded0c9e1022225f8e0630b35a9b54be713736": "USDT",
+};
+
+const publicClient = createPublicClient({
+  chain: xLayer,
+  transport: http(),
+});
+
+async function resolveEip712Domain(assetAddress: `0x${string}`) {
+  const tokenAbi = [
+    {
+      type: "function",
+      name: "name",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "string" }],
+    },
+    {
+      type: "function",
+      name: "version",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "string" }],
+    },
+  ] as const;
+
+  let name = "USD Coin";
+  try {
+    name = await publicClient.readContract({
+      address: assetAddress,
+      abi: tokenAbi,
+      functionName: "name",
+    });
+  } catch {}
+
+  let version = "1";
+  try {
+    version = await publicClient.readContract({
+      address: assetAddress,
+      abi: tokenAbi,
+      functionName: "version",
+    });
+  } catch {}
+
+  return { name, version };
+}
 
 const BASE_URL = process.env.STRATEGY_SQUARE_URL || "http://localhost:3456";
 const PRIVATE_KEY = process.env.DEMO_AGENT_PRIVATE_KEY as `0x${string}`;
@@ -80,8 +130,9 @@ async function run() {
   if (signalRes.status === 402) {
     const body = await signalRes.json();
     const reqs = body.paymentRequirements;
+    const assetLabel = KNOWN_ASSET_SYMBOLS[(reqs.asset || "").toLowerCase()] || "TOKEN";
     console.log("  Payment Required:");
-    console.log(`    Amount: ${reqs.maxAmountRequired} (USDC decimals)`);
+    console.log(`    Amount: ${reqs.maxAmountRequired} (${assetLabel} decimals)`);
     console.log(`    Pay to: ${reqs.payTo}`);
     console.log(`    Asset:  ${reqs.asset}`);
     console.log(`    Resource: ${reqs.resource}`);
@@ -108,10 +159,11 @@ async function run() {
     };
 
     // Sign the authorization using EIP-712
+    const eip712Domain = await resolveEip712Domain(reqs.asset as `0x${string}`);
     const domain = {
-      name: "USD Coin",
-      version: "1",
-      chainId: 196n,
+      name: eip712Domain.name,
+      version: eip712Domain.version,
+      chainId: BigInt(196),
       verifyingContract: reqs.asset as `0x${string}`,
     };
 
@@ -147,6 +199,7 @@ async function run() {
     console.log("Step 5: Retrying with x402 payment...");
     const paymentPayload = {
       x402Version: "1",
+      chainIndex: typeof reqs.chainIndex === "number" ? reqs.chainIndex : Number(reqs.chainIndex || 196),
       scheme: "exact",
       payload: {
         signature,
@@ -192,7 +245,7 @@ async function run() {
         console.log("");
         console.log("  To complete with real payment:");
         console.log("    - Set OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSPHRASE in .env.local");
-        console.log("    - Fund the agent wallet with USDC on X Layer");
+        console.log(`    - Fund the agent wallet with ${assetLabel} on X Layer`);
       }
     }
   } else {
