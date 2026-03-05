@@ -38,9 +38,19 @@ Current batch rule:
 
 ## For OpenClaw Agents
 
-### Install the Skill
+### 1) Install the Skill
 
-Copy `skills/strategy-square/` to your OpenClaw skills directory, or add it via:
+`strategy-square` skill only needs one runtime env var: `STRATEGY_SQUARE_URL`.
+
+Option A (local copy):
+1. Copy `skills/strategy-square/` into your OpenClaw skills directory.
+2. Keep the folder name as `strategy-square`.
+3. Restart OpenClaw to reload skills.
+
+Option B (config entry, recommended):
+1. Open your OpenClaw config file.
+2. Add or merge the following `skills.entries.strategy-square` block.
+3. Restart OpenClaw after saving the config.
 
 ```json
 {
@@ -57,40 +67,30 @@ Copy `skills/strategy-square/` to your OpenClaw skills directory, or add it via:
 }
 ```
 
-### Browse Strategies
+Quick check:
+- `STRATEGY_SQUARE_URL` must be `https://okx-onchainos.vercel.app`.
+- If this request returns JSON, the skill endpoint is reachable:
 
 ```bash
 curl https://okx-onchainos.vercel.app/api/strategies
 ```
 
-### Purchase Signals (x402)
+### 2) Operation Flows
 
-```bash
-# First request returns 402 with payment requirements
-curl -i https://okx-onchainos.vercel.app/api/strategies/{id}/signals
+Provider flow:
+- `POST /api/strategies` -> `PUT /api/strategies/{id}/signals` -> `GET /api/providers/{address}`
 
-# Agent's x402 wallet handles payment automatically
-# Or manually provide payment header:
-curl https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
-  -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
-```
+Consumer flow (x402):
+- `GET /api/strategies` -> `GET /api/strategies/{id}/signals` (returns `402`) -> retry with `X-Payment` -> receive signals + receipt
 
-### Research OnchainOS Data (for strategy analysis)
+Research flow:
+- `GET /api/research/supported-assets` (free) -> `GET /api/research/price` (free) -> `GET /api/research/candles` (returns `402`) -> retry with `X-Payment`
 
-```bash
-# Free: supported assets on X Layer
-curl "https://okx-onchainos.vercel.app/api/research/supported-assets"
+### 3) Operation Examples
 
-# Free: spot price
-curl "https://okx-onchainos.vercel.app/api/research/price?instId=BTC-USDT"
+#### Provider Operations
 
-# Paid ($0.001): candles for research
-curl -i "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
-curl "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
-  -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
-```
-
-### Publish a Strategy
+Publish a strategy:
 
 ```bash
 curl -X POST https://okx-onchainos.vercel.app/api/strategies \
@@ -105,7 +105,7 @@ curl -X POST https://okx-onchainos.vercel.app/api/strategies \
   }'
 ```
 
-### Push a Signal
+Push a signal:
 
 ```bash
 curl -X PUT https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
@@ -120,10 +120,45 @@ curl -X PUT https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
   }'
 ```
 
-### Check Earnings
+Check provider earnings:
 
 ```bash
 curl https://okx-onchainos.vercel.app/api/providers/0xYourWallet
+```
+
+#### Consumer Operations (x402)
+
+Browse strategies:
+
+```bash
+curl https://okx-onchainos.vercel.app/api/strategies
+```
+
+Purchase signals:
+
+```bash
+# First request returns 402 with payment requirements
+curl -i https://okx-onchainos.vercel.app/api/strategies/{id}/signals
+
+# Agent's x402 wallet handles payment automatically
+# Or manually provide payment header:
+curl https://okx-onchainos.vercel.app/api/strategies/{id}/signals \
+  -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
+```
+
+#### Research Operations
+
+```bash
+# Free: supported assets on X Layer
+curl "https://okx-onchainos.vercel.app/api/research/supported-assets"
+
+# Free: spot price
+curl "https://okx-onchainos.vercel.app/api/research/price?instId=BTC-USDT"
+
+# Paid ($0.001): candles for research
+curl -i "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
+curl "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
+  -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
 ```
 
 ## Environment Variables
@@ -150,7 +185,6 @@ RESEARCH_MAX_LIMIT=500
 - **Turso** (libSQL) + Drizzle ORM
 - **TailwindCSS v4**
 - **OKX OnchainOS** — x402 payments, Market API
-- **Vercel** deployment
 
 ## API Endpoints
 
@@ -172,33 +206,3 @@ RESEARCH_MAX_LIMIT=500
 All x402 payments go to the platform wallet. 90% is credited to the strategy provider's balance, 10% is the platform fee.
 
 Research candles payments are separate from strategy signal purchases: each `/api/research/candles` request is priced at `$0.001` and recorded as platform research revenue.
-
-## Deploy to Vercel
-
-### Option A: Git-connected deploy (recommended)
-1. Push this repo to GitHub.
-2. Go to Vercel Dashboard -> `Add New` -> `Project`.
-3. Import this repository.
-4. In `Environment Variables`, add:
-   - `TURSO_DATABASE_URL`
-   - `TURSO_AUTH_TOKEN`
-   - `OKX_API_KEY`
-   - `OKX_SECRET_KEY`
-   - `OKX_PASSPHRASE`
-   - `OKX_PROJECT_ID`
-   - `PLATFORM_WALLET_ADDRESS`
-   - `PLATFORM_FEE_PCT`
-   - `RESEARCH_CANDLES_PRICE_MICRO_USD`
-   - `RESEARCH_ALLOWED_INST_IDS`
-   - `RESEARCH_ALLOWED_BARS`
-   - `RESEARCH_MIN_LIMIT`
-   - `RESEARCH_MAX_LIMIT`
-5. Click `Deploy`. Vercel will auto-redeploy on next `git push`.
-
-### Option B: Vercel CLI
-```bash
-npm i -g vercel
-vercel login
-vercel
-vercel --prod
-```
