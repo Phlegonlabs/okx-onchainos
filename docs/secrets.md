@@ -25,6 +25,15 @@ PLATFORM_WALLET_ADDRESS=0xYourPlatformWalletAddress
 PLATFORM_FEE_PCT=10
 
 # ============================================================
+# Research API Configuration (/api/research/*)
+# ============================================================
+RESEARCH_CANDLES_PRICE_MICRO_USD=1000
+RESEARCH_ALLOWED_INST_IDS=BTC-USDT,ETH-USDT,SOL-USDT,OKB-USDT,XRP-USDT,DOGE-USDT,ADA-USDT
+RESEARCH_ALLOWED_BARS=1m,5m,15m,1H,4H,1D
+RESEARCH_MIN_LIMIT=20
+RESEARCH_MAX_LIMIT=500
+
+# ============================================================
 # Demo Agent (for scripts/demo-agent.ts only)
 # ============================================================
 DEMO_AGENT_PRIVATE_KEY=0xYourDemoAgentPrivateKey
@@ -44,6 +53,11 @@ DEMO_AGENT_ADDRESS=0xYourDemoAgentAddress
 | `NEXT_PUBLIC_BASE_URL` | No | Client-side | Base URL for the app. Defaults to `http://localhost:3000`. |
 | `PLATFORM_WALLET_ADDRESS` | Yes | `src/lib/x402.ts` | The wallet address that receives all x402 payments. Must be a valid EVM address on X Layer. |
 | `PLATFORM_FEE_PCT` | No | `src/app/api/strategies/[id]/signals/route.ts` | Platform fee percentage. Defaults to `10` (10%). |
+| `RESEARCH_CANDLES_PRICE_MICRO_USD` | No | `src/lib/research.ts` | Price per candles request in micro USD units. Default `1000` = `$0.001`. |
+| `RESEARCH_ALLOWED_INST_IDS` | No | `src/lib/research.ts`, `src/app/api/research/price/route.ts`, `src/app/api/research/candles/route.ts` | CSV whitelist of allowed instrument IDs for research APIs. |
+| `RESEARCH_ALLOWED_BARS` | No | `src/lib/research.ts`, `src/app/api/research/candles/route.ts` | CSV whitelist of allowed candle bars. |
+| `RESEARCH_MIN_LIMIT` | No | `src/lib/research.ts`, `src/app/api/research/candles/route.ts` | Minimum allowed `limit` for candles queries (default `20`). |
+| `RESEARCH_MAX_LIMIT` | No | `src/lib/research.ts`, `src/app/api/research/candles/route.ts` | Maximum allowed `limit` for candles queries (default `500`). |
 | `DEMO_AGENT_PRIVATE_KEY` | Demo only | `scripts/demo-agent.ts` | Private key for the demo consumer agent wallet. |
 | `DEMO_AGENT_ADDRESS` | Demo only | `scripts/demo-agent.ts` | Address of the demo consumer agent wallet. |
 

@@ -49,6 +49,17 @@
 | M6-T1   | OpenClaw SKILL.md                  | done          |
 | M6-T2   | README + agent quickstart          | done          |
 
+## M8: OpenClaw Research API
+
+| Task ID | Description                        | Commit Status |
+|---------|------------------------------------|---------------|
+| M8-T1   | Research data client + config      | done          |
+| M8-T2   | Add research payment persistence   | done          |
+| M8-T3   | Free research routes               | done          |
+| M8-T4   | Paid candles route (x402)          | done          |
+| M8-T5   | OpenClaw skill + docs update       | done          |
+| M8-T6   | Verification (typecheck + tests)   | done          |
+
 ## M7: Production Readiness Gate
 
 | Task ID | Description                        | Commit Status |

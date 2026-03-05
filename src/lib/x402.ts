@@ -3,8 +3,23 @@ import { createOkxHeaders } from "./okx-auth";
 const OKX_BASE = "https://web3.okx.com";
 const VERIFY_PATH = "/api/v6/x402/verify";
 const SETTLE_PATH = "/api/v6/x402/settle";
-const XLAYER_CHAIN_INDEX = "196";
-const XLAYER_USDT_ADDRESS = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+export const XLAYER_CHAIN_INDEX = "196";
+export const XLAYER_USDT_ADDRESS =
+  "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+
+type PaymentRequirementBuildParams = {
+  amountCents: number;
+  resource: string;
+  description: string;
+  mimeType?: string;
+};
+
+type PaymentRequirementBuildMicroUsdParams = {
+  amountMicroUsd: number;
+  resource: string;
+  description: string;
+  mimeType?: string;
+};
 
 export interface PaymentRequirements {
   x402Version: string;
@@ -201,15 +216,50 @@ export function buildPaymentRequirements(
   strategyName: string,
   pricePerSignalCents: number
 ): PaymentRequirements {
+  return buildPaymentRequirementsForAmount({
+    amountCents: pricePerSignalCents,
+    resource: `/api/strategies/${strategyId}/signals`,
+    description: `Access signals for strategy: ${strategyName}`,
+  });
+}
+
+export function buildPaymentRequirementsForAmount(
+  params: PaymentRequirementBuildParams
+): PaymentRequirements {
+  const normalizedCents = Number.isFinite(params.amountCents)
+    ? Math.max(0, Math.round(params.amountCents))
+    : 0;
+
   return {
     x402Version: "1",
     chainIndex: XLAYER_CHAIN_INDEX,
     scheme: "exact",
-    maxAmountRequired: String(pricePerSignalCents * 10000),
+    maxAmountRequired: String(normalizedCents * 10000),
     payTo: process.env.PLATFORM_WALLET_ADDRESS || "",
     asset: XLAYER_USDT_ADDRESS, // USDT on X Layer
-    resource: `/api/strategies/${strategyId}/signals`,
-    description: `Access signals for strategy: ${strategyName}`,
-    mimeType: "application/json",
+    resource: params.resource,
+    description: params.description,
+    mimeType: params.mimeType || "application/json",
+  };
+}
+
+export function buildPaymentRequirementsForMicroUsd(
+  params: PaymentRequirementBuildMicroUsdParams
+): PaymentRequirements {
+  const normalizedMicroUsd = Number.isFinite(params.amountMicroUsd)
+    ? Math.max(0, Math.round(params.amountMicroUsd))
+    : 0;
+
+  // USDT has 6 decimals, so 1 microUSD maps to 1 base unit.
+  return {
+    x402Version: "1",
+    chainIndex: XLAYER_CHAIN_INDEX,
+    scheme: "exact",
+    maxAmountRequired: String(normalizedMicroUsd),
+    payTo: process.env.PLATFORM_WALLET_ADDRESS || "",
+    asset: XLAYER_USDT_ADDRESS,
+    resource: params.resource,
+    description: params.description,
+    mimeType: params.mimeType || "application/json",
   };
 }

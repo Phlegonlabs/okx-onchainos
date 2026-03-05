@@ -1,6 +1,6 @@
 ---
 name: strategy-square
-description: Browse, publish, and purchase on-chain trading strategies via x402 on Strategy Square marketplace
+description: Browse, publish, purchase, and research on-chain trading data via x402 on Strategy Square marketplace
 metadata: { "openclaw": { "emoji": "📊", "requires": { "env": ["STRATEGY_SQUARE_URL"] }, "primaryEnv": "STRATEGY_SQUARE_URL" } }
 ---
 
@@ -47,6 +47,33 @@ First request returns HTTP 402 with payment requirements. Your x402 payment prov
 
 After payment, response: `{ signals: [...], receipt: { txHash, paidAmount, providerCredited, platformFee } }`
 
+### Research Market Data (OpenClaw Analysis Flow)
+
+#### 1) Discover supported assets (free)
+
+```
+GET {STRATEGY_SQUARE_URL}/api/research/supported-assets
+```
+
+#### 2) Check current price (free)
+
+```
+GET {STRATEGY_SQUARE_URL}/api/research/price?instId=BTC-USDT
+```
+
+#### 3) Pull candles for strategy analysis (x402 payment required)
+
+```
+GET {STRATEGY_SQUARE_URL}/api/research/candles?instId=BTC-USDT&bar=1H&limit=120
+```
+
+Behavior:
+1. First request returns HTTP 402 + `paymentRequirements`
+2. Your x402 wallet signs and retries with `X-Payment`
+3. Success response returns `{ candles: [...], receipt: {...} }`
+
+Use this route to run your own quantitative analysis and strategy research in OpenClaw.
+
 ### Publish a Strategy (Provider)
 
 ```
@@ -57,12 +84,12 @@ Content-Type: application/json
   "description": "Description of the strategy logic",
   "asset": "ETH/USDC",
   "timeframe": "4h",
-  "pricePerSignal": 10,
+  "pricePerSignal": 5,
   "providerAddress": "0xYourWalletAddress"
 }
 ```
 
-`pricePerSignal` is in cents (10 = $0.10). Response: `201 { id }`
+`pricePerSignal` is in cents (5 = $0.05). Response: `201 { id }`
 
 ### Push a Signal (Provider)
 
@@ -93,4 +120,5 @@ Response: `{ balance: { totalEarnedCents, pendingCents, totalSignalsSold }, stra
 - Asset: USDT (USD₮0), contract `0x779ded0c9e1022225f8e0630b35a9b54be713736`
 - Protocol: x402 v1
 - Platform fee: 10% (90% goes to strategy provider)
+- Research candles API price: `$0.001` per request (`/api/research/candles`)
 - No API key or account needed — payment is authentication

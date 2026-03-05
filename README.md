@@ -17,6 +17,25 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to see the marketplace.
 
+## Reprice Active Strategies (No DB Reset)
+
+Use this when you want to lower prices for existing active strategies without clearing data:
+
+```bash
+# Local SQLite (local.db)
+TURSO_DATABASE_URL=file:local.db bun run strategy:reprice-active
+
+# Turso remote
+TURSO_DATABASE_URL=libsql://your-db.turso.io \
+TURSO_AUTH_TOKEN=your-token \
+bun run strategy:reprice-active
+```
+
+Current batch rule:
+- `pricePerSignal >= 20` -> `9` cents
+- `pricePerSignal >= 12` -> `7` cents
+- `pricePerSignal >= 8` -> `5` cents
+
 ## For OpenClaw Agents
 
 ### Install the Skill
@@ -56,6 +75,21 @@ curl https://your-deployment.vercel.app/api/strategies/{id}/signals \
   -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
 ```
 
+### Research OnchainOS Data (for strategy analysis)
+
+```bash
+# Free: supported assets on X Layer
+curl "https://your-deployment.vercel.app/api/research/supported-assets"
+
+# Free: spot price
+curl "https://your-deployment.vercel.app/api/research/price?instId=BTC-USDT"
+
+# Paid ($0.001): candles for research
+curl -i "https://your-deployment.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
+curl "https://your-deployment.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
+  -H 'X-Payment: {"x402Version":"1","scheme":"exact","payload":{...}}'
+```
+
 ### Publish a Strategy
 
 ```bash
@@ -66,7 +100,7 @@ curl -X POST https://your-deployment.vercel.app/api/strategies \
     "description": "RSI-based ETH trading signals",
     "asset": "ETH/USDC",
     "timeframe": "4h",
-    "pricePerSignal": 10,
+    "pricePerSignal": 5,
     "providerAddress": "0xYourWallet"
   }'
 ```
@@ -103,6 +137,11 @@ OKX_PASSPHRASE=your-passphrase
 OKX_PROJECT_ID=your-project-id
 PLATFORM_WALLET_ADDRESS=0xYourPlatformWallet
 PLATFORM_FEE_PCT=10
+RESEARCH_CANDLES_PRICE_MICRO_USD=1000
+RESEARCH_ALLOWED_INST_IDS=BTC-USDT,ETH-USDT,SOL-USDT,OKB-USDT,XRP-USDT,DOGE-USDT,ADA-USDT
+RESEARCH_ALLOWED_BARS=1m,5m,15m,1H,4H,1D
+RESEARCH_MIN_LIMIT=20
+RESEARCH_MAX_LIMIT=500
 ```
 
 ## Tech Stack
@@ -124,7 +163,42 @@ PLATFORM_FEE_PCT=10
 | PUT | `/api/strategies/:id/signals` | Push new signal |
 | GET | `/api/providers/:address` | Provider balance |
 | GET | `/api/market/:token` | Token price (OKX proxy) |
+| GET | `/api/research/supported-assets` | Supported OnchainOS assets |
+| GET | `/api/research/price?instId=...` | Spot price for instrument |
+| GET | `/api/research/candles?instId=...&bar=...&limit=...` | Paid candles for research (x402) |
 
 ## Revenue Model
 
 All x402 payments go to the platform wallet. 90% is credited to the strategy provider's balance, 10% is the platform fee.
+
+Research candles payments are separate from strategy signal purchases: each `/api/research/candles` request is priced at `$0.001` and recorded as platform research revenue.
+
+## Deploy to Vercel
+
+### Option A: Git-connected deploy (recommended)
+1. Push this repo to GitHub.
+2. Go to Vercel Dashboard -> `Add New` -> `Project`.
+3. Import this repository.
+4. In `Environment Variables`, add:
+   - `TURSO_DATABASE_URL`
+   - `TURSO_AUTH_TOKEN`
+   - `OKX_API_KEY`
+   - `OKX_SECRET_KEY`
+   - `OKX_PASSPHRASE`
+   - `OKX_PROJECT_ID`
+   - `PLATFORM_WALLET_ADDRESS`
+   - `PLATFORM_FEE_PCT`
+   - `RESEARCH_CANDLES_PRICE_MICRO_USD`
+   - `RESEARCH_ALLOWED_INST_IDS`
+   - `RESEARCH_ALLOWED_BARS`
+   - `RESEARCH_MIN_LIMIT`
+   - `RESEARCH_MAX_LIMIT`
+5. Click `Deploy`. Vercel will auto-redeploy on next `git push`.
+
+### Option B: Vercel CLI
+```bash
+npm i -g vercel
+vercel login
+vercel
+vercel --prod
+```

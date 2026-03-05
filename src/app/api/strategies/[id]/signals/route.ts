@@ -12,6 +12,27 @@ import {
 
 const PLATFORM_FEE_PCT = parseInt(process.env.PLATFORM_FEE_PCT || "10", 10);
 
+function buildOpenClawMessages(
+  strategyName: string,
+  rows: Array<{
+    action: string;
+    token: string;
+    entry: number;
+    stopLoss: number | null;
+    takeProfit: number | null;
+    createdAt: string | null;
+  }>
+): string[] {
+  return rows.map((row) => {
+    const action = row.action.toUpperCase();
+    const entry = Number(row.entry).toFixed(2);
+    const sl = row.stopLoss == null ? "-" : Number(row.stopLoss).toFixed(2);
+    const tp = row.takeProfit == null ? "-" : Number(row.takeProfit).toFixed(2);
+    const ts = row.createdAt || "unknown-time";
+    return `[${strategyName}] ${action} ${row.token} @ ${entry} | SL ${sl} | TP ${tp} | ${ts}`;
+  });
+}
+
 // GET - x402 gated: returns signals after payment
 export async function GET(
   req: NextRequest,
@@ -117,8 +138,11 @@ export async function GET(
     .where(eq(signals.strategyId, id))
     .orderBy(desc(signals.createdAt));
 
+  const openclawMessages = buildOpenClawMessages(strategy.name, allSignals);
+
   return NextResponse.json({
     signals: allSignals,
+    openclawMessages,
     receipt: {
       strategyId: id,
       strategyName: strategy.name,

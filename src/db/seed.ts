@@ -72,7 +72,7 @@ const seedStrategies = [
       "SMA 20/50 crossover strategy. Goes long when fast MA crosses above slow MA, short on death cross. Works best in trending markets.",
     asset: "ETH/USDC",
     timeframe: "4h",
-    pricePerSignal: 10,
+    pricePerSignal: 5,
     providerAddress: "0xAlpha1234567890abcdef1234567890abcdef1234",
     token: "ETH",
     basePrice: 3200,
@@ -85,7 +85,7 @@ const seedStrategies = [
       "RSI oversold/overbought reversal strategy. Enters on RSI < 30 (buy) or RSI > 70 (sell) with volume confirmation.",
     asset: "BTC/USDC",
     timeframe: "1d",
-    pricePerSignal: 25,
+    pricePerSignal: 8,
     providerAddress: "0xBeta0987654321fedcba0987654321fedcba0987",
     token: "BTC",
     basePrice: 95000,
@@ -98,7 +98,7 @@ const seedStrategies = [
       "MACD histogram momentum strategy. Enters on golden cross, exits on death cross. Optimized for SOL volatility.",
     asset: "SOL/USDC",
     timeframe: "4h",
-    pricePerSignal: 15,
+    pricePerSignal: 6,
     providerAddress: "0xGamma1111222233334444555566667777888899990",
     token: "SOL",
     basePrice: 180,
@@ -111,7 +111,7 @@ const seedStrategies = [
       "Mean reversion strategy using Bollinger Bands. Buys at lower band, sells at upper band. Best in ranging markets.",
     asset: "ETH/USDC",
     timeframe: "1d",
-    pricePerSignal: 20,
+    pricePerSignal: 7,
     providerAddress: "0xDeltaAAAABBBBCCCCDDDDEEEEFFFF000011112222",
     token: "ETH",
     basePrice: 3200,
@@ -175,6 +175,35 @@ async function seed() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY,
+      strategy_id TEXT NOT NULL REFERENCES strategies(id),
+      subscriber_address TEXT NOT NULL,
+      plan_days INTEGER NOT NULL DEFAULT 30,
+      status TEXT NOT NULL DEFAULT 'active',
+      started_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_paid_signal_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS research_payments (
+      id TEXT PRIMARY KEY,
+      payer_address TEXT NOT NULL,
+      resource TEXT NOT NULL,
+      inst_id TEXT NOT NULL,
+      bar TEXT NOT NULL,
+      limit INTEGER NOT NULL,
+      amount_micro_usd INTEGER NOT NULL,
+      amount_base_units TEXT NOT NULL,
+      tx_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'settled',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    DELETE FROM research_payments;
+    DELETE FROM subscriptions;
     DELETE FROM signals;
     DELETE FROM payments;
     DELETE FROM provider_balances;

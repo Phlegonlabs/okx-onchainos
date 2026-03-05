@@ -153,6 +153,45 @@
 
 ---
 
+## M8: OpenClaw Research API
+
+**Goal**: Let OpenClaw agents fetch OnchainOS raw data for strategy research via our API, with x402-paid candles access.
+
+### Tasks
+
+#### M8-T1: Research data client + config
+- Implement `src/lib/research.ts` for supported assets, spot price, and candles (web3.okx.com only)
+- Add env-driven whitelists: `instId`, `bar`, `limit`
+- Commit Boundary: exactly one atomic commit
+
+#### M8-T2: Add research payment persistence
+- Add `research_payments` table in `src/db/schema.ts`
+- Update `src/db/seed.ts` table bootstrap for local/dev reset
+- Commit Boundary: exactly one atomic commit
+
+#### M8-T3: Free research routes
+- Implement `GET /api/research/supported-assets`
+- Implement `GET /api/research/price?instId=...`
+- Commit Boundary: exactly one atomic commit
+
+#### M8-T4: Paid candles route (x402)
+- Implement `GET /api/research/candles?instId=...&bar=...&limit=...`
+- Flow: 402 requirements -> verify -> fetch candles -> settle -> record payment
+- Price model: fixed `1000 microUSD` (`$0.001`) per request
+- Commit Boundary: exactly one atomic commit
+
+#### M8-T5: OpenClaw skill + docs update
+- Extend `skills/strategy-square/SKILL.md` with research workflow and examples
+- Update docs for new endpoints and env vars
+- Commit Boundary: exactly one atomic commit
+
+#### M8-T6: Verification
+- Add/update tests for x402 microUSD requirements and research config helpers
+- Run typecheck and tests before marking milestone complete
+- Commit Boundary: exactly one atomic commit
+
+---
+
 ## M7: Production Readiness Gate
 
 **Goal**: Deploy to Vercel, ensure everything works end-to-end.

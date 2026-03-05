@@ -53,3 +53,32 @@ export const providerBalances = sqliteTable("provider_balances", {
   totalSignalsSold: integer("total_signals_sold").default(0),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
 });
+
+export const subscriptions = sqliteTable("subscriptions", {
+  id: text("id").primaryKey(),
+  strategyId: text("strategy_id")
+    .notNull()
+    .references(() => strategies.id),
+  subscriberAddress: text("subscriber_address").notNull(),
+  planDays: integer("plan_days").notNull().default(30),
+  status: text("status").notNull().default("active"), // active | expired | canceled
+  startedAt: text("started_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  lastPaidSignalAt: text("last_paid_signal_at"),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+export const researchPayments = sqliteTable("research_payments", {
+  id: text("id").primaryKey(),
+  payerAddress: text("payer_address").notNull(),
+  resource: text("resource").notNull(),
+  instId: text("inst_id").notNull(),
+  bar: text("bar").notNull(),
+  limit: integer("limit").notNull(),
+  amountMicroUsd: integer("amount_micro_usd").notNull(),
+  amountBaseUnits: text("amount_base_units").notNull(),
+  txHash: text("tx_hash"),
+  status: text("status").notNull().default("settled"),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});

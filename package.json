@@ -11,7 +11,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "npx tsx src/db/seed.ts",
-    "strategy:live": "bun run scripts/live-strategy-runner.ts"
+    "strategy:live": "bun run scripts/live-strategy-runner.ts",
+    "strategy:publish-live": "bun run scripts/publish-live-strategies.ts",
+    "strategy:reprice-active": "bun run scripts/reprice-active-strategies.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",

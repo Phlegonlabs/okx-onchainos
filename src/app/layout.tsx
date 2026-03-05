@@ -56,6 +56,12 @@ export default function RootLayout({
               >
                 Marketplace
               </Link>
+              <Link
+                href="/operations"
+                className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
+              >
+                Operations
+              </Link>
               <a
                 href="https://github.com/Phlegonlabs/okx-onchainos"
                 target="_blank"

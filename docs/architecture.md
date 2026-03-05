@@ -34,6 +34,7 @@ Consumer Agent --x402--> Platform Wallet (100%)
 - **Platform wallet**: set via `PLATFORM_WALLET_ADDRESS` env var
 - Provider earnings tracked in `provider_balances` table
 - No on-chain payout mechanism (demo scope)
+- Research API (`/api/research/candles`) is separately priced at `$0.001` per request and recorded in `research_payments` (100% platform revenue)
 
 ## 2. Core User Journeys
 
@@ -139,6 +140,19 @@ provider_balances
   pendingCents    INTEGER DEFAULT 0    -- not yet withdrawn (all, for demo)
   totalSignalsSold INTEGER DEFAULT 0
   updatedAt       TEXT DEFAULT (datetime('now'))
+
+research_payments
+  id            TEXT PRIMARY KEY (nanoid)
+  payerAddress  TEXT NOT NULL
+  resource      TEXT NOT NULL          -- e.g. /api/research/candles?...
+  instId        TEXT NOT NULL          -- e.g. BTC-USDT
+  bar           TEXT NOT NULL          -- e.g. 1H
+  limit         INTEGER NOT NULL
+  amountMicroUsd INTEGER NOT NULL      -- 1000 = $0.001
+  amountBaseUnits TEXT NOT NULL        -- USDT 6-decimal units
+  txHash        TEXT                   -- on-chain settlement tx hash
+  status        TEXT DEFAULT 'settled'
+  createdAt     TEXT DEFAULT (datetime('now'))
 ```
 
 ## 5. API Endpoints
@@ -152,6 +166,9 @@ provider_balances
 | PUT    | `/api/strategies/:id/signals`| None    | Push new signal          |
 | GET    | `/api/providers/:address`    | None    | Provider balance/stats   |
 | GET    | `/api/market/:token`         | None    | Token price (proxy OKX)  |
+| GET    | `/api/research/supported-assets` | None | OnchainOS supported assets |
+| GET    | `/api/research/price`        | None    | Spot price by `instId`   |
+| GET    | `/api/research/candles`      | x402    | Paid candles for research |
 
 ## 6. x402 Payment Flow
 
@@ -202,6 +219,10 @@ provider_balances
 ### Market API
 - Token prices and charts for strategy display
 - Base URL: `https://web3.okx.com`
+- Research routes:
+  - `GET /api/research/supported-assets` (free)
+  - `GET /api/research/price?instId=...` (free)
+  - `GET /api/research/candles?instId=...&bar=...&limit=...` (x402, fixed `$0.001`)
 
 ### Auth Headers (for settle)
 - `OK-ACCESS-KEY` - API key
@@ -228,6 +249,13 @@ okx-onchainos/
 │   │       ├── providers/
 │   │       │   └── [address]/
 │   │       │       └── route.ts        # GET provider balance
+│   │       ├── research/
+│   │       │   ├── supported-assets/
+│   │       │   │   └── route.ts        # free list for chainIndex 196
+│   │       │   ├── price/
+│   │       │   │   └── route.ts        # free spot price by instId
+│   │       │   └── candles/
+│   │       │       └── route.ts        # x402-paid candles for research
 │   │       └── market/
 │   │           └── [token]/
 │   │               └── route.ts        # proxy OKX Market API
@@ -238,7 +266,8 @@ okx-onchainos/
 │   ├── lib/
 │   │   ├── x402.ts                     # x402 verify/settle helpers
 │   │   ├── okx-auth.ts                 # OKX HMAC signing
-│   │   └── market.ts                   # OKX Market API client
+│   │   ├── market.ts                   # OKX Market API client
+│   │   └── research.ts                 # OnchainOS research data client
 │   └── components/
 │       ├── strategy-card.tsx
 │       ├── signal-table.tsx
@@ -278,7 +307,7 @@ Each seeded with ~20 historical signals, realistic win rates (55-70%), and retur
 ```yaml
 ---
 name: strategy-square
-description: Browse and purchase on-chain trading strategies via x402
+description: Browse, publish, purchase, and research on-chain trading data via x402
 metadata: { "openclaw": { "emoji": "📊", "requires": { "env": ["STRATEGY_SQUARE_URL"] } } }
 ---
 ```
@@ -290,6 +319,9 @@ The skill instructs the agent to:
 - `PUT {STRATEGY_SQUARE_URL}/api/strategies/:id/signals` — push signal (provider)
 - `GET {STRATEGY_SQUARE_URL}/api/strategies/:id/signals` — buy signals (consumer, x402 gated)
 - `GET {STRATEGY_SQUARE_URL}/api/providers/:address` — check earnings (provider)
+- `GET {STRATEGY_SQUARE_URL}/api/research/supported-assets` — discover assets (free)
+- `GET {STRATEGY_SQUARE_URL}/api/research/price?instId=BTC-USDT` — spot price (free)
+- `GET {STRATEGY_SQUARE_URL}/api/research/candles?instId=BTC-USDT&bar=1H&limit=120` — candles (x402, $0.001/request)
 
 ### x402 payment flow (agent perspective)
 
@@ -300,7 +332,7 @@ Agent calls GET /api/strategies/:id/signals
        x402Version: "1",
        paymentRequirements: {
          scheme: "exact",
-         maxAmountRequired: "10000",    // $0.10 in USDC decimals
+         maxAmountRequired: "5000",     // $0.05 in USDC decimals
          payTo: "0xPlatformWallet",
          asset: "0x..USDC",
          resource: "/api/strategies/:id/signals"

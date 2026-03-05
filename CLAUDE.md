@@ -11,10 +11,12 @@ Agent-to-agent on-chain strategy marketplace. Provider agents publish strategies
 - Deploy: Vercel
 
 ## Key Files
-- `src/db/schema.ts` - DB schema (strategies, signals, payments)
+- `src/db/schema.ts` - DB schema (strategies, signals, payments, research_payments)
 - `src/lib/x402.ts` - x402 verify/settle
+- `src/lib/research.ts` - OnchainOS research data client + whitelist config
 - `src/lib/okx-auth.ts` - HMAC-SHA256 signing
 - `src/app/api/strategies/` - CRUD endpoints
+- `src/app/api/research/` - research endpoints (supported-assets, price, candles)
 - `docs/architecture.md` - single source of truth
 
 ## OKX x402 Endpoints
@@ -31,6 +33,7 @@ Agent-to-agent on-chain strategy marketplace. Provider agents publish strategies
 - All x402 payments go to PLATFORM_WALLET_ADDRESS
 - 90% credited to provider (DB balance), 10% platform fee
 - Provider balance tracked in provider_balances table
+- Research candles API (`/api/research/candles`) is fixed-price at `$0.001` and tracked as platform revenue
 - No on-chain payout (demo scope)
 
 ## DB Tables
@@ -38,6 +41,7 @@ Agent-to-agent on-chain strategy marketplace. Provider agents publish strategies
 - signals: id, strategyId, action (buy/sell), token, entry, stopLoss, takeProfit, outcome, returnPct
 - payments: id, strategyId, amountCents, providerCents, platformCents, txHash, status
 - provider_balances: providerAddress, totalEarnedCents, pendingCents, totalSignalsSold
+- research_payments: id, payerAddress, resource, instId, bar, limit, amountMicroUsd, amountBaseUnits, txHash, status
 
 ## Rules
 - API-first: all functionality via REST before UI
@@ -47,4 +51,4 @@ Agent-to-agent on-chain strategy marketplace. Provider agents publish strategies
 - English UI only
 
 ## Env Vars (in .env.local)
-TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSPHRASE, OKX_PROJECT_ID, PLATFORM_WALLET_ADDRESS, PLATFORM_FEE_PCT
+TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSPHRASE, OKX_PROJECT_ID, PLATFORM_WALLET_ADDRESS, PLATFORM_FEE_PCT, RESEARCH_CANDLES_PRICE_MICRO_USD, RESEARCH_ALLOWED_INST_IDS, RESEARCH_ALLOWED_BARS, RESEARCH_MIN_LIMIT, RESEARCH_MAX_LIMIT
