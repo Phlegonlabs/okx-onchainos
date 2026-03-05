@@ -3,6 +3,7 @@ import { strategies, signals } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { SignalTable } from "@/components/signal-table";
+import { MarketPrice } from "@/components/market-price";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,10 @@ export default async function StrategyDetail({
         </div>
 
         <p className="mt-4 text-sm text-zinc-400">{strategy.description}</p>
+
+        <div className="mt-4">
+          <MarketPrice token={strategy.asset.split("/")[0]} />
+        </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatBox
