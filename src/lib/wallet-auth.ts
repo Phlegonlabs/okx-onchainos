@@ -130,7 +130,7 @@ export function buildWalletAuthMessage(
   params: WalletAuthMessageParams
 ): string {
   return [
-    "Strategy Square Wallet Auth",
+    "Trading Strategy Agent Gateway Wallet Auth",
     `Address: ${normalizeAddress(params.address)}`,
     `Method: ${params.method.toUpperCase()}`,
     `Path: ${params.path}`,
@@ -199,4 +199,3 @@ export function resolvePaymentPayer(
     payer?.trim() || paymentPayload.payload.authorization.from || "";
   return normalizeAddress(resolved);
 }
-

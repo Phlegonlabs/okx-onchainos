@@ -1,4 +1,4 @@
-# Strategy Square - Implementation Rules
+# Trading Strategy Agent Gateway - Implementation Rules
 
 ## First-Principles Execution
 

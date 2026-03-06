@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "npx tsx src/db/seed.ts",
+    "db:ensure": "bun run scripts/ensure-schema-no-reset.ts",
     "strategy:live": "bun run scripts/live-strategy-runner.ts",
     "strategy:publish-live": "bun run scripts/publish-live-strategies.ts",
     "strategy:reprice-active": "bun run scripts/reprice-active-strategies.ts"

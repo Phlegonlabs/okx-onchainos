@@ -1,4 +1,4 @@
-# Strategy Square - Design System
+# Trading Strategy Agent Gateway - Design System
 
 ## Theme
 

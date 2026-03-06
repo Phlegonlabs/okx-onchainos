@@ -15,7 +15,7 @@ export async function GET(
     .where(eq(strategies.id, id))
     .get();
 
-  if (!strategy) {
+  if (!strategy || strategy.listingStatus !== "approved" || strategy.status !== "active") {
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
   }
 

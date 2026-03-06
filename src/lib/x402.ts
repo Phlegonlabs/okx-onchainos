@@ -211,18 +211,6 @@ export async function settlePayment(
   }
 }
 
-export function buildPaymentRequirements(
-  strategyId: string,
-  strategyName: string,
-  pricePerSignalCents: number
-): PaymentRequirements {
-  return buildPaymentRequirementsForAmount({
-    amountCents: pricePerSignalCents,
-    resource: `/api/strategies/${strategyId}/signals`,
-    description: `Access signals for strategy: ${strategyName}`,
-  });
-}
-
 export function buildPaymentRequirementsForAmount(
   params: PaymentRequirementBuildParams
 ): PaymentRequirements {

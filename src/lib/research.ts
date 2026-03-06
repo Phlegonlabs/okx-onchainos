@@ -14,7 +14,6 @@ const DEFAULT_ALLOWED_INST_IDS = [
 const DEFAULT_ALLOWED_BARS = ["1m", "5m", "15m", "1H", "4H", "1D"] as const;
 const DEFAULT_MIN_LIMIT = 20;
 const DEFAULT_MAX_LIMIT = 500;
-const DEFAULT_CANDLES_PRICE_MICRO_USD = 1000; // $0.001
 const PRICE_CACHE_TTL_MS = 30_000;
 const SUPPORTED_ASSETS_CACHE_TTL_MS = 60_000;
 
@@ -51,7 +50,6 @@ export type ResearchConfig = {
   allowedBars: Set<string>;
   minLimit: number;
   maxLimit: number;
-  candlesPriceMicroUsd: number;
 };
 
 export type ResearchPrice = {
@@ -177,10 +175,6 @@ export function getResearchConfig(): ResearchConfig {
     minLimit,
     toPositiveInt(process.env.RESEARCH_MAX_LIMIT, DEFAULT_MAX_LIMIT)
   );
-  const candlesPriceMicroUsd = toPositiveInt(
-    process.env.RESEARCH_CANDLES_PRICE_MICRO_USD,
-    DEFAULT_CANDLES_PRICE_MICRO_USD
-  );
 
   return {
     allowedInstIds: parseCsvUpperEnv(
@@ -190,7 +184,6 @@ export function getResearchConfig(): ResearchConfig {
     allowedBars: parseCsvEnv(process.env.RESEARCH_ALLOWED_BARS, DEFAULT_ALLOWED_BARS),
     minLimit,
     maxLimit,
-    candlesPriceMicroUsd,
   };
 }
 

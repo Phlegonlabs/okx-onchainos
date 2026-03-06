@@ -1,49 +1,57 @@
-# Strategy Square - Architecture Decision Records
+# Trading Strategy Agent Gateway - Architecture Decision Records
 
 ## ADR-001: Turso over Cloudflare D1
 
-**Context**: User initially wanted D1, but D1 requires Cloudflare Workers runtime. Vercel deployment was preferred.
+Use Turso / libSQL to stay SQLite-friendly while keeping Vercel deployment straightforward.
 
-**Decision**: Use Turso (libSQL) which is SQLite-compatible and has native Vercel support via `@libsql/client`.
+## ADR-002: Private gateway access over open public write access
 
-**Consequences**: Same SQLite developer experience, zero extra latency, works with Drizzle ORM.
+The product is no longer an open write surface.
 
-## ADR-002: No user authentication
+Decision:
+- public routes stay read-only
+- premium routes require `GATEWAY_SKILL_TOKEN`
+- owner-sensitive routes also require wallet-auth
 
-**Context**: Platform serves OpenClaw agents as primary consumers. Agents identify via wallet address in x402 payments.
+## ADR-003: x402 stays as the premium settlement layer
 
-**Decision**: No auth system. Provider identified by `providerAddress` in strategy creation. Consumer identified by `payer` in x402 payment.
+x402 remains mandatory for:
+- live signal batches
+- research candles
 
-**Consequences**: Simpler implementation. Anyone can create strategies (acceptable for demo). Payment verification via x402 provides implicit identity.
+It is no longer treated as the only product gate.
 
-## ADR-003: x402 as sole payment method
+## ADR-004: Submission-first supply model
 
-**Context**: OKX OnchainOS hackathon requires using their capabilities. x402 is the native AI-agent payment protocol.
+Providers do not directly create public strategies.
 
-**Decision**: All signal purchases go through x402. No Stripe, no other payment methods.
+Decision:
+- providers submit template + params
+- platform backtests first
+- only approved submissions become public strategies
 
-**Consequences**: Agent-native. Zero gas on X Layer. Limited to USDC/USDT/USDG on X Layer for now.
+## ADR-005: Platform-managed pricing
 
-## ADR-004: Pre-seeded strategies for demo
+Providers do not self-price.
 
-**Context**: Need to show a working marketplace on day one.
+Decision:
+- score determines strategy tier
+- strategy tier determines unit price and 30-day cap
+- research candles use request-size tiers
 
-**Decision**: Seed 4 demo strategies with ~20 fake historical signals each. Real providers can also create strategies via API.
+## ADR-006: Platform-managed live signal generation
 
-**Consequences**: Immediate visual impact for judges. Mix of demo + real data.
+Manual provider signal pushes are retired.
 
-## ADR-005: API-first, UI-second
+Decision:
+- approved strategies are synced by platform-controlled workflows
+- public subscriptions consume only `live` signals
 
-**Context**: Primary users are OpenClaw agents, not humans.
+## ADR-007: Platform custody revenue model remains
 
-**Decision**: Build all API endpoints first (M2-M3), then UI (M4). UI is read-only showcase.
+Signal revenue still settles to the platform wallet first.
 
-**Consequences**: Agents can use the platform before UI exists. UI is a nice-to-have for the demo.
-
-## ADR-006: Platform custody revenue model (Mode A)
-
-**Context**: Need to decide how x402 payments flow. Three options: A) platform collects all, tracks provider balances in DB; B) direct to provider wallet; C) two-step settle.
-
-**Decision**: Mode A — all x402 payments go to platform wallet. 90% credited to provider balance in DB, 10% platform fee. No on-chain payout mechanism.
-
-**Consequences**: Single wallet to manage. Platform can show revenue metrics. Provider "balance" is a DB number — withdrawal is out of scope for hackathon. Simple to implement and demo.
+Decision:
+- `90%` provider
+- `10%` platform
+- provider withdrawal remains out of scope

@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { strategies, subscriptions } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { GatewayAuthError, requireGatewayAccess } from "@/lib/gateway-auth";
 import {
   verifyWalletAuthRequest,
   WalletAuthError,
@@ -32,6 +33,15 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    requireGatewayAccess(req.headers);
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
+  }
+
   const { id } = await params;
   const subscriberAddress = (
     req.nextUrl.searchParams.get("subscriberAddress") || ""
@@ -47,12 +57,20 @@ export async function GET(
   }
 
   const strategy = await db
-    .select({ id: strategies.id, name: strategies.name, pricePerSignal: strategies.pricePerSignal })
+    .select({
+      id: strategies.id,
+      name: strategies.name,
+      pricePerSignal: strategies.pricePerSignal,
+      status: strategies.status,
+      listingStatus: strategies.listingStatus,
+      strategyTier: strategies.strategyTier,
+      periodCapCents: strategies.periodCapCents,
+    })
     .from(strategies)
     .where(eq(strategies.id, id))
     .get();
 
-  if (!strategy) {
+  if (!strategy || strategy.listingStatus !== "approved" || strategy.status !== "active") {
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
   }
 
@@ -80,6 +98,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    requireGatewayAccess(req.headers);
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
+  }
+
   const { id } = await params;
 
   const strategy = await db
@@ -89,12 +116,15 @@ export async function POST(
       pricePerSignal: strategies.pricePerSignal,
       providerAddress: strategies.providerAddress,
       status: strategies.status,
+      listingStatus: strategies.listingStatus,
+      strategyTier: strategies.strategyTier,
+      periodCapCents: strategies.periodCapCents,
     })
     .from(strategies)
     .where(eq(strategies.id, id))
     .get();
 
-  if (!strategy || strategy.status !== "active") {
+  if (!strategy || strategy.status !== "active" || strategy.listingStatus !== "approved") {
     return NextResponse.json({ error: "Active strategy not found" }, { status: 404 });
   }
 

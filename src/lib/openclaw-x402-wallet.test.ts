@@ -149,7 +149,7 @@ describe("openclaw x402 wallet client", () => {
         address: "0x1111111111111111111111111111111111111111",
         signMessage: async ({ message }) => {
           expect(typeof message).toBe("string");
-          expect(String(message)).toContain("Strategy Square Wallet Auth");
+          expect(String(message)).toContain("Trading Strategy Agent Gateway Wallet Auth");
           expect(String(message)).toContain("Path: /api/strategies");
           return "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
         },

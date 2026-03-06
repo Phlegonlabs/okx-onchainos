@@ -21,7 +21,9 @@ export default async function StrategyDetail({
     .where(eq(strategies.id, id))
     .get();
 
-  if (!strategy) notFound();
+  if (!strategy || strategy.listingStatus !== "approved" || strategy.status !== "active") {
+    notFound();
+  }
 
   const allSignals = await db
     .select()
@@ -42,7 +44,7 @@ export default async function StrategyDetail({
         href="/"
         className="mono-font inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
       >
-        &larr; Back to marketplace
+        &larr; Back to gateway
       </Link>
 
       <section className="surface-card relative overflow-hidden rounded-3xl p-6 sm:p-8">
@@ -68,25 +70,32 @@ export default async function StrategyDetail({
               <span className="mono-font text-xs text-zinc-300">
                 ${((strategy.pricePerSignal || 0) / 100).toFixed(2)} per signal
               </span>
+              <span className="text-xs text-zinc-600">&middot;</span>
+              <span className="mono-font text-xs text-zinc-300">
+                ${((strategy.periodCapCents || 0) / 100).toFixed(2)} / 30d cap
+              </span>
             </div>
 
             <p className="mt-5 text-sm leading-relaxed text-zinc-400">
               {strategy.description}
             </p>
 
-            <div className="mt-5">
-              <Link
-                href={`/providers/${strategy.providerAddress}`}
-                className="mono-font inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
-              >
-                Provider {strategy.providerAddress?.slice(0, 8)}...
-                {strategy.providerAddress?.slice(-6)}
-              </Link>
+            <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+                Listing Tier
+              </p>
+              <p className="mono-font mt-1 text-lg font-semibold text-zinc-100">
+                {(strategy.strategyTier || "tier_1").replace("_", " ").toUpperCase()}
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                Managed by the gateway. Providers submit template parameters;
+                the platform backtests, prices, and runs the live signal rail.
+              </p>
             </div>
           </div>
 
           <div className="space-y-3">
-            <MarketPrice token={strategy.asset.split("/")[0]} />
+            <MarketPrice token={strategy.asset.split(/[-/]/)[0]} />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
               <StatBox
                 label="Win Rate"

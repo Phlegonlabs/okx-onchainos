@@ -123,9 +123,17 @@ const seedStrategies = [
 async function seed() {
   console.log("Seeding database...");
 
-  // Create tables via push (uses drizzle-kit under the hood for local)
-  // For local dev, we'll create tables directly
   await client.executeMultiple(`
+    DROP TABLE IF EXISTS strategy_backtests;
+    DROP TABLE IF EXISTS strategy_submissions;
+    DROP TABLE IF EXISTS research_payments;
+    DROP TABLE IF EXISTS subscriptions;
+    DROP TABLE IF EXISTS wallet_auth_nonces;
+    DROP TABLE IF EXISTS payments;
+    DROP TABLE IF EXISTS signals;
+    DROP TABLE IF EXISTS provider_balances;
+    DROP TABLE IF EXISTS strategies;
+
     CREATE TABLE IF NOT EXISTS strategies (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -138,6 +146,14 @@ async function seed() {
       win_rate REAL DEFAULT 0,
       avg_return REAL DEFAULT 0,
       status TEXT DEFAULT 'active',
+      listing_status TEXT DEFAULT 'approved',
+      template_key TEXT,
+      params_json TEXT,
+      score INTEGER DEFAULT 0,
+      strategy_tier TEXT DEFAULT 'tier_1',
+      period_cap_cents INTEGER DEFAULT 149,
+      last_scored_at TEXT,
+      manual_delisted_at TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -152,6 +168,7 @@ async function seed() {
       reasoning TEXT,
       outcome TEXT,
       return_pct REAL,
+      source TEXT DEFAULT 'backtest',
       created_at TEXT DEFAULT (datetime('now')),
       settled_at TEXT
     );
@@ -159,9 +176,12 @@ async function seed() {
     CREATE TABLE IF NOT EXISTS payments (
       id TEXT PRIMARY KEY,
       strategy_id TEXT NOT NULL REFERENCES strategies(id),
+      subscription_id TEXT,
       amount_cents INTEGER NOT NULL,
       provider_cents INTEGER NOT NULL,
       platform_cents INTEGER NOT NULL,
+      billing_type TEXT NOT NULL DEFAULT 'signal_batch',
+      units_billed INTEGER NOT NULL DEFAULT 1,
       tx_hash TEXT,
       status TEXT DEFAULT 'settled',
       created_at TEXT DEFAULT (datetime('now'))
@@ -209,13 +229,42 @@ async function seed() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
-    DELETE FROM research_payments;
-    DELETE FROM wallet_auth_nonces;
-    DELETE FROM subscriptions;
-    DELETE FROM signals;
-    DELETE FROM payments;
-    DELETE FROM provider_balances;
-    DELETE FROM strategies;
+    CREATE TABLE IF NOT EXISTS strategy_submissions (
+      id TEXT PRIMARY KEY,
+      provider_address TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      inst_id TEXT NOT NULL,
+      timeframe TEXT NOT NULL,
+      template_key TEXT NOT NULL,
+      params_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      score INTEGER DEFAULT 0,
+      rejection_reason TEXT,
+      strategy_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS strategy_backtests (
+      id TEXT PRIMARY KEY,
+      submission_id TEXT NOT NULL REFERENCES strategy_submissions(id),
+      strategy_id TEXT,
+      status TEXT NOT NULL,
+      inst_id TEXT NOT NULL,
+      timeframe TEXT NOT NULL,
+      template_key TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      signal_count INTEGER NOT NULL,
+      win_rate REAL NOT NULL,
+      avg_return REAL NOT NULL,
+      cumulative_return_pct REAL NOT NULL,
+      max_drawdown_pct REAL NOT NULL,
+      window_days INTEGER NOT NULL,
+      params_json TEXT NOT NULL,
+      metrics_json TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   for (const s of seedStrategies) {

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nanoid } from "nanoid";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   payments,
@@ -7,8 +9,8 @@ import {
   strategies,
   subscriptions,
 } from "@/db/schema";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { GatewayAuthError, requireGatewayAccess } from "@/lib/gateway-auth";
+import { clampSignalCharge } from "@/lib/gateway-pricing";
 import {
   buildPaymentRequirementsForAmount,
   settlePayment,
@@ -33,14 +35,13 @@ function buildOpenClawMessages(
     takeProfit: number | null;
     createdAt: string | null;
   }>
-): string[] {
+) {
   return rows.map((row) => {
     const action = row.action.toUpperCase();
     const entry = Number(row.entry).toFixed(2);
-    const sl = row.stopLoss == null ? "-" : Number(row.stopLoss).toFixed(2);
-    const tp = row.takeProfit == null ? "-" : Number(row.takeProfit).toFixed(2);
-    const ts = row.createdAt || "unknown-time";
-    return `[${strategyName}] ${action} ${row.token} @ ${entry} | SL ${sl} | TP ${tp} | ${ts}`;
+    const stopLoss = row.stopLoss == null ? "-" : Number(row.stopLoss).toFixed(2);
+    const takeProfit = row.takeProfit == null ? "-" : Number(row.takeProfit).toFixed(2);
+    return `[${strategyName}] ${action} ${row.token} @ ${entry} | SL ${stopLoss} | TP ${takeProfit} | ${row.createdAt || "unknown-time"}`;
   });
 }
 
@@ -48,8 +49,16 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ subscriptionId: string }> }
 ) {
-  const { subscriptionId } = await params;
+  try {
+    requireGatewayAccess(req.headers);
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
+  }
 
+  const { subscriptionId } = await params;
   const subscription = await db
     .select()
     .from(subscriptions)
@@ -66,7 +75,7 @@ export async function GET(
     .where(eq(strategies.id, subscription.strategyId))
     .get();
 
-  if (!strategy) {
+  if (!strategy || strategy.listingStatus !== "approved" || strategy.status !== "active") {
     return NextResponse.json({ error: "Strategy not found for subscription" }, { status: 404 });
   }
 
@@ -75,12 +84,10 @@ export async function GET(
     if (subscription.status === "active" && subscription.expiresAt <= now) {
       await db
         .update(subscriptions)
-        .set({
-          status: "expired",
-          updatedAt: sql`datetime('now')`,
-        })
+        .set({ status: "expired", updatedAt: sql`datetime('now')` })
         .where(eq(subscriptions.id, subscription.id));
     }
+
     return NextResponse.json(
       {
         error: "Subscription expired or inactive",
@@ -100,6 +107,7 @@ export async function GET(
     .where(
       and(
         eq(signals.strategyId, subscription.strategyId),
+        eq(signals.source, "live"),
         gt(signals.createdAt, anchor)
       )
     )
@@ -111,15 +119,63 @@ export async function GET(
       pendingCount: 0,
       signals: [],
       openclawMessages: [],
-      message: "No new signals yet",
+      message: "No new live signals yet",
     });
   }
 
-  const amountCents = strategy.pricePerSignal * pendingSignals.length;
+  const spendRow = await db
+    .select({
+      total: sql<number>`coalesce(sum(${payments.amountCents}), 0)`,
+    })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.subscriptionId, subscription.id),
+        eq(payments.status, "settled"),
+        eq(payments.billingType, "signal_batch")
+      )
+    )
+    .get();
+
+  const alreadySpentCents = Number(spendRow?.total ?? 0);
+  const charge = clampSignalCharge({
+    periodCapCents: strategy.periodCapCents ?? 149,
+    pricePerSignal: strategy.pricePerSignal,
+    pendingSignalCount: pendingSignals.length,
+    alreadySpentCents,
+  });
+  const openclawMessages = buildOpenClawMessages(strategy.name, pendingSignals);
+
+  if (charge.chargedCents <= 0) {
+    const latestSignal = pendingSignals[pendingSignals.length - 1];
+    await db
+      .update(subscriptions)
+      .set({
+        lastPaidSignalAt: latestSignal.createdAt || anchor,
+        updatedAt: sql`datetime('now')`,
+      })
+      .where(eq(subscriptions.id, subscription.id));
+
+    return NextResponse.json({
+      signals: pendingSignals,
+      pendingCount: pendingSignals.length,
+      openclawMessages,
+      receipt: {
+        subscriptionId: subscription.id,
+        strategyId: strategy.id,
+        strategyName: strategy.name,
+        paidAmount: 0,
+        periodSpendCents: alreadySpentCents,
+        remainingCapCents: charge.remainingCapCents,
+        capReached: true,
+      },
+    });
+  }
+
   const paymentReqs = buildPaymentRequirementsForAmount({
-    amountCents,
+    amountCents: charge.chargedCents,
     resource: `/api/subscriptions/${subscriptionId}/signals`,
-    description: `Subscription signals for ${strategy.name} (${pendingSignals.length} new)`,
+    description: `Live signals for ${strategy.name} (${pendingSignals.length} pending, capped billing)`,
   });
 
   const paymentHeader = req.headers.get("x-payment");
@@ -128,6 +184,13 @@ export async function GET(
       {
         pendingCount: pendingSignals.length,
         paymentRequirements: paymentReqs,
+        billing: {
+          requestedCents: charge.requestedCents,
+          chargedCents: charge.chargedCents,
+          periodSpendCents: alreadySpentCents,
+          remainingCapCents: charge.remainingCapCents,
+          periodCapCents: strategy.periodCapCents,
+        },
       },
       {
         status: 402,
@@ -140,7 +203,7 @@ export async function GET(
 
   let paymentPayload: PaymentPayload;
   try {
-    paymentPayload = JSON.parse(paymentHeader);
+    paymentPayload = JSON.parse(paymentHeader) as PaymentPayload;
   } catch {
     return NextResponse.json(
       { error: "Invalid X-Payment header: must be valid JSON" },
@@ -176,15 +239,18 @@ export async function GET(
     );
   }
 
-  const platformCents = Math.round(amountCents * PLATFORM_FEE_PCT / 100);
-  const providerCents = amountCents - platformCents;
+  const platformCents = Math.round((charge.chargedCents * PLATFORM_FEE_PCT) / 100);
+  const providerCents = charge.chargedCents - platformCents;
 
   await db.insert(payments).values({
     id: nanoid(12),
     strategyId: strategy.id,
-    amountCents,
+    subscriptionId: subscription.id,
+    amountCents: charge.chargedCents,
     providerCents,
     platformCents,
+    billingType: "signal_batch",
+    unitsBilled: pendingSignals.length,
     txHash: settleResult.txHash,
     status: "settled",
   });
@@ -218,8 +284,6 @@ export async function GET(
     })
     .where(eq(subscriptions.id, subscription.id));
 
-  const openclawMessages = buildOpenClawMessages(strategy.name, pendingSignals);
-
   return NextResponse.json({
     signals: pendingSignals,
     pendingCount: pendingSignals.length,
@@ -228,10 +292,17 @@ export async function GET(
       subscriptionId: subscription.id,
       strategyId: strategy.id,
       strategyName: strategy.name,
-      paidAmount: amountCents,
+      paidAmount: charge.chargedCents,
+      requestedAmount: charge.requestedCents,
       payerAddress,
       providerCredited: providerCents,
       platformFee: platformCents,
+      periodSpendCents: alreadySpentCents + charge.chargedCents,
+      remainingCapCents: Math.max(
+        0,
+        (strategy.periodCapCents ?? 149) - alreadySpentCents - charge.chargedCents
+      ),
+      capReached: charge.capReached,
       txHash: settleResult.txHash,
     },
   });

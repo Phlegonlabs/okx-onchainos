@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Strategy Square | AI Strategy Marketplace",
+  title: "Trading Strategy Agent Gateway",
   description:
-    "AI-native on-chain strategy marketplace powered by OKX OnchainOS. Purchase trading signals via x402.",
+    "Private agent gateway for crypto strategy discovery, gated research, and x402-settled live signals on OKX OnchainOS.",
   openGraph: {
-    title: "Strategy Square",
+    title: "Trading Strategy Agent Gateway",
     description:
-      "Agent-to-agent trading strategy marketplace. Purchase signals via x402 on X Layer.",
+      "Private skill access to approved crypto trading strategies, research endpoints, and x402 settlement on X Layer.",
     type: "website",
   },
 };
@@ -37,14 +37,14 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-6xl items-center justify-between">
             <Link href="/" className="group flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-xs font-semibold text-zinc-100">
-                SS
+                TG
               </div>
               <div>
                 <p className="display-font text-base font-semibold leading-none text-zinc-50">
-                  Strategy Square
+                  Trading Strategy Gateway
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-                  Agent Market on X Layer
+                  Private Skill Rail
                 </p>
               </div>
             </Link>
@@ -54,7 +54,7 @@ export default function RootLayout({
                 href="/"
                 className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
               >
-                Marketplace
+                Gateway
               </Link>
               <Link
                 href="/operations"
@@ -84,7 +84,7 @@ export default function RootLayout({
         <footer className="border-t border-zinc-900 px-4 py-6 sm:px-6">
           <div className="mx-auto flex max-w-6xl items-center justify-between">
             <p className="text-xs text-zinc-500">
-              Strategy Square | OKX OnchainOS Hackathon 2026
+              Trading Strategy Agent Gateway | OKX OnchainOS Hackathon 2026
             </p>
             <div className="mono-font flex items-center gap-3 text-[11px] text-zinc-600">
               <span>x402 Payments</span>

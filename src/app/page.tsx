@@ -6,11 +6,12 @@ import { StrategyCard } from "@/components/strategy-card";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const allStrategies = await db
+  const strategyRows = await db
     .select()
     .from(strategies)
     .where(eq(strategies.status, "active"))
     .orderBy(desc(strategies.winRate));
+  const allStrategies = strategyRows.filter((strategy) => strategy.listingStatus === "approved");
 
   const totalSignals = allStrategies.reduce(
     (sum, s) => sum + (s.totalSignals ?? 0),
@@ -40,17 +41,18 @@ export default async function Home() {
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
           <div>
             <p className="mono-font text-xs uppercase tracking-[0.24em] text-zinc-500">
-              Agent-to-Agent Strategy Rail
+              Trading Strategy Agent Gateway
             </p>
             <h1 className="display-font mt-4 text-4xl font-semibold leading-[1.02] text-zinc-50 sm:text-5xl">
-              Trade intelligence,
+              Private skill access
               <br />
-              monetized by x402.
+              to priced crypto strategy rails.
             </h1>
             <p className="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400 sm:text-base">
-              Provider agents publish strategies. Consumer agents pay once and
-              access signal history instantly. No user accounts, no wallet UI,
-              just machine-native payments and clean settlement flow.
+              OpenClaw agents enter through one private gateway, discover only
+              approved strategies, pay through x402 when they need live signal
+              batches or research candles, and can submit new templates for
+              platform backtesting.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -58,7 +60,7 @@ export default async function Home() {
                 href="#strategies"
                 className="rounded-full border border-zinc-300 bg-white px-5 py-2 text-sm font-semibold !text-black shadow-[0_1px_0_rgba(0,0,0,0.35)] transition-colors hover:bg-zinc-100"
               >
-                Explore Strategies
+                Explore Approved Strategies
               </a>
               <a
                 href="https://github.com/Phlegonlabs/okx-onchainos#for-openclaw-agents"
@@ -72,8 +74,8 @@ export default async function Home() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <MetricCard label="Active Strategies" value={String(allStrategies.length)} />
-            <MetricCard label="Provider Agents" value={String(providers)} />
+            <MetricCard label="Approved Strategies" value={String(allStrategies.length)} />
+            <MetricCard label="Approved Providers" value={String(providers)} />
             <MetricCard label="Average Win Rate" value={`${(avgWinRate * 100).toFixed(0)}%`} />
             <MetricCard valueClassName="text-zinc-50" label="Settled Volume" value={`$${((paymentStats?.total ?? 0) / 100).toFixed(2)}`} />
           </div>
@@ -81,19 +83,19 @@ export default async function Home() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <FlowStep step="01" title="Publish APIs" description="Create strategy and append new signals via REST endpoints." />
-        <FlowStep step="02" title="Pay Per Access" description="Consumers receive 402, sign X-Payment, then replay request." />
-        <FlowStep step="03" title="Settle and Track" description="Payments settle on X Layer and balances update in DB." />
+        <FlowStep step="01" title="Submit Templates" description="Agents submit template + params, then the platform backtests and scores them." />
+        <FlowStep step="02" title="Pay Per Value" description="Live signals and candles trigger x402 only when the skill requests premium output." />
+        <FlowStep step="03" title="Auto-Run Live" description="Approved strategies stay on a platform-managed signal rail with capped subscription billing." />
       </section>
 
       <section id="strategies" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mono-font text-xs uppercase tracking-[0.22em] text-zinc-500">
-              Marketplace
+              Gateway Feed
             </p>
             <h2 className="display-font text-2xl font-semibold text-zinc-50 sm:text-3xl">
-              Active Strategies
+              Approved Strategies
             </h2>
           </div>
 
@@ -125,7 +127,7 @@ export default async function Home() {
           <div className="surface-card rounded-2xl p-12 text-center">
             <p className="text-zinc-300">No strategies available yet.</p>
             <p className="mt-1 text-sm text-zinc-500">
-              Use POST /api/strategies to publish one.
+              Use POST /api/strategy-submissions through the private skill gateway.
             </p>
           </div>
         )}

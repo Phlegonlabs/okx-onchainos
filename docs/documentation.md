@@ -1,147 +1,135 @@
-# Strategy Square - User Documentation
+# Trading Strategy Agent Gateway - User Documentation
 
-## What is Strategy Square?
+## Product Shape
 
-Strategy Square is an AI-native on-chain strategy marketplace. Providers publish strategies, subscribers create a 30-day subscription, and new signals are billed through x402 on OKX X Layer.
+Trading Strategy Agent Gateway is a private agent-facing gateway.
 
-## OpenClaw Wallet Requirement
+It exposes:
+- public strategy discovery
+- private strategy submission
+- private subscriptions
+- private provider earnings
+- public research metadata
+- private x402-paid research candles
 
-This product assumes the OpenClaw runtime already has:
-- an X Layer wallet
-- enough USDT (USDt0) to pay x402 requests
-- the ability to sign wallet-auth headers for provider writes and subscription creation
+Only approved strategies are listed publicly.
 
-The skill itself does not install or provision this wallet.
+## Authentication Layers
 
-## For Strategy Providers
+### Public read routes
 
-### Publish a Strategy (wallet-signed)
+No bearer token required:
+- `GET /api/strategies`
+- `GET /api/strategies/:id`
+- `GET /api/research/supported-assets`
+- `GET /api/research/price`
 
-`POST /api/strategies` requires these headers:
+### Private skill routes
+
+Require:
+- `Authorization: Bearer <GATEWAY_SKILL_TOKEN>`
+
+### Owner actions
+
+Require:
+- bearer token
+- wallet-auth headers
+
+Wallet-auth headers:
 - `X-Wallet-Address`
 - `X-Wallet-Timestamp`
 - `X-Wallet-Nonce`
 - `X-Wallet-Signature`
 
-The signing wallet must match `providerAddress`.
+### Paid routes
 
-Example body:
+Require:
+- bearer token
+- x402 retry flow when the route responds with `402`
 
-```json
-{
-  "name": "My Alpha Strategy",
-  "description": "RSI-based ETH trading signals",
-  "asset": "ETH/USDC",
-  "timeframe": "4h",
-  "pricePerSignal": 5,
-  "providerAddress": "0xYourWalletAddress"
-}
-```
+## Strategy Submission
 
-Response: `201 { "id": "abc123" }`
+`POST /api/strategy-submissions`
 
-### Push a Signal (wallet-signed)
-
-`PUT /api/strategies/abc123/signals` requires the same wallet-auth headers. The signing wallet must match the strategy owner.
-
-Example body:
+Body:
 
 ```json
 {
-  "action": "buy",
-  "token": "ETH",
-  "entry": 3250.5,
-  "stopLoss": 3100,
-  "takeProfit": 3500,
-  "reasoning": "RSI crossed above 30, bullish divergence on 4h"
+  "providerAddress": "0xYourWalletAddress",
+  "name": "ETH 4H Momentum",
+  "description": "Trend-following template submission",
+  "instId": "ETH-USDT",
+  "timeframe": "4H",
+  "templateKey": "sma_crossover",
+  "params": {
+    "fastPeriod": 20,
+    "slowPeriod": 50
+  }
 }
 ```
 
-### Check Provider Earnings
+Supported templates:
+- `sma_crossover`
+- `rsi_reversion`
+- `bollinger_mean_reversion`
 
-```bash
-curl https://okx-onchainos.vercel.app/api/providers/0xYourWalletAddress
-```
+Approved submissions produce:
+- public strategy listing
+- score
+- pricing tier
+- 30-day billing cap
+- backtest history records
 
-## For Strategy Consumers
+## Subscription Signals
 
-### Browse Strategies
+`POST /api/strategies/:id/subscribe`
 
-```bash
-curl https://okx-onchainos.vercel.app/api/strategies
-```
+Create or reuse a subscription for an approved strategy.
 
-### Create or Reuse Subscription (wallet-signed)
-
-`POST /api/strategies/{id}/subscribe` requires wallet-auth headers.
-
-Example body:
-
-```json
-{
-  "subscriberAddress": "0xYourWalletAddress",
-  "planDays": 30
-}
-```
+`GET /api/subscriptions/:subscriptionId/signals`
 
 Behavior:
-- signing wallet must match `subscriberAddress`
-- existing active subscription is reused
-- success response returns `{ strategy, subscription, reused }`
+- no new live signals -> free `200`
+- pending live signals -> `402`
+- after payment -> returns the full pending batch
+- billing is capped inside the subscription period
 
-### Poll Subscription Signals (x402)
+Receipt fields include:
+- `paidAmount`
+- `requestedAmount`
+- `periodSpendCents`
+- `remainingCapCents`
+- `capReached`
 
-```bash
-curl -i https://okx-onchainos.vercel.app/api/subscriptions/sub_123/signals
-```
+## Research Candles
 
-Behavior:
-- if no new signals exist, response is free
-- if new signals exist, response is `402` with `paymentRequirements`
-- retry with `X-Payment`
-- x402 payer must match the original `subscriberAddress`
+`GET /api/research/candles?instId=BTC-USDT&bar=1H&limit=120`
 
-Success response includes:
-- `signals`
-- `openclawMessages`
-- `receipt`
+Pricing:
+- up to 120 candles: `$0.005`
+- above 120 candles: `$0.015`
 
-### Legacy Direct Purchase Route
+Response includes:
+- candles payload
+- `receipt.paidMicroUsd`
+- `receipt.paidBaseUnits`
+- `receipt.pricingTier`
 
-```bash
-curl -i https://okx-onchainos.vercel.app/api/strategies/abc123/signals
-```
+## Provider Earnings
 
-This route still works, but new OpenClaw integrations should prefer the subscription flow.
+`GET /api/providers/:address`
 
-## For OpenClaw Strategy Research
+This is no longer a public browser surface.
+It requires the private bearer token and owner wallet-auth.
 
-### Get Supported Assets (Free)
+## Internal Control Endpoints
 
-```bash
-curl "https://okx-onchainos.vercel.app/api/research/supported-assets"
-```
+Require `Authorization: Bearer <INTERNAL_CONTROL_TOKEN>`:
+- `POST /api/internal/strategy-sync`
+- `POST /api/internal/strategy-rescore`
 
-### Get Spot Price (Free)
+`strategy-sync`:
+- runs platform-managed live signal generation
 
-```bash
-curl "https://okx-onchainos.vercel.app/api/research/price?instId=BTC-USDT"
-```
-
-### Get Candles (x402, $0.001 per request)
-
-```bash
-curl -i "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
-curl "https://okx-onchainos.vercel.app/api/research/candles?instId=BTC-USDT&bar=1H&limit=120" \
-  -H "X-Payment: {x402 payment payload}"
-```
-
-Response includes standardized candle data and a payment receipt:
-`{ candles: [...], receipt: { paidMicroUsd, paidBaseUnits, txHash } }`
-
-## Supported Payment
-
-- Network: X Layer (zero gas fees)
-- Asset: USDT (USD₮0), contract `0x779ded0c9e1022225f8e0630b35a9b54be713736`
-- Protocol: x402 v1
-- Research candles route pricing: `1000 microUSD` (`$0.001`) per request
+`strategy-rescore`:
+- recomputes strategy score, tier, price, cap, and listing state

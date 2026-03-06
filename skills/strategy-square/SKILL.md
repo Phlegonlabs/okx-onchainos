@@ -1,23 +1,22 @@
 ---
 name: strategy-square
-description: Browse, publish, purchase, and research on-chain trading data via x402 on Strategy Square marketplace
-metadata: { "openclaw": { "emoji": "📊", "requires": { "env": ["STRATEGY_SQUARE_URL"] }, "primaryEnv": "STRATEGY_SQUARE_URL" } }
+description: Access the private Trading Strategy Agent Gateway for approved strategy discovery, template submissions, research data, and x402-settled live signal retrieval
+metadata: { "openclaw": { "emoji": "📊", "requires": { "env": ["STRATEGY_SQUARE_URL", "STRATEGY_SQUARE_TOKEN"] }, "primaryEnv": "STRATEGY_SQUARE_URL" } }
 ---
 
-# Strategy Square
+# Trading Strategy Agent Gateway
 
-An AI-native on-chain strategy marketplace powered by OKX OnchainOS.
+Private skill-gated access to approved crypto trading strategies on OKX OnchainOS.
 
-## Prerequisites
+## Required Runtime
 
-This skill does **not** install or generate a wallet by itself.
+This skill assumes the OpenClaw runtime already has:
+- an X Layer wallet with USDT
+- bearer access token for the private gateway
+- wallet-auth signing capability for owner actions
+- x402 retry capability for `402 -> X-Payment -> retry`
 
-To use paid or write routes, the OpenClaw runtime must already have:
-- an X Layer wallet with USDT (USDt0)
-- a signing capability for custom wallet-auth headers
-- x402 payment capability for `402 -> X-Payment -> retry`
-
-If your OpenClaw environment only supports pure skill text without a wallet runtime, use this skill in read-only mode:
+If your runtime has no wallet or no bearer token, use only public read routes:
 - `GET /api/strategies`
 - `GET /api/strategies/{id}`
 - `GET /api/research/supported-assets`
@@ -25,38 +24,75 @@ If your OpenClaw environment only supports pure skill text without a wallet runt
 
 ## Configuration
 
-Set `STRATEGY_SQUARE_URL` to the base URL of the Strategy Square instance.
+- `STRATEGY_SQUARE_URL` = gateway base URL
+- `STRATEGY_SQUARE_TOKEN` = private bearer token for skill access
 
-If you embed this repo's helper runtime, use:
-- `createOpenClawX402Wallet(...).requestWithWalletAuth(...)` for provider writes and subscription creation
-- `createOpenClawX402Wallet(...).requestWithAutoPayment(...)` for x402-paid reads
+If you embed this repo's helper runtime:
+- use `requestWithWalletAuth(...)` for submission, subscription, and provider routes
+- use `requestWithAutoPayment(...)` for x402-paid reads
+- always include `Authorization: Bearer ${process.env.STRATEGY_SQUARE_TOKEN}`
 
 ## Available Actions
 
-### Browse Strategies
+### Browse approved strategies
 
-List all active strategies:
-
-```
+```http
 GET {STRATEGY_SQUARE_URL}/api/strategies
-GET {STRATEGY_SQUARE_URL}/api/strategies?sort=winRate
-GET {STRATEGY_SQUARE_URL}/api/strategies?sort=avgReturn
-```
-
-Response: `{ strategies: [{ id, name, description, asset, timeframe, pricePerSignal, winRate, avgReturn, totalSignals }] }`
-
-### Get Strategy Details
-
-```
+GET {STRATEGY_SQUARE_URL}/api/strategies?sort=score
 GET {STRATEGY_SQUARE_URL}/api/strategies/{id}
 ```
 
-Response: `{ strategy: {...}, recentSignals: [...] }`
+### Submit a candidate strategy
 
-### Subscribe to a Strategy (wallet-signed)
-
+```http
+POST {STRATEGY_SQUARE_URL}/api/strategy-submissions
+Authorization: Bearer {STRATEGY_SQUARE_TOKEN}
+Content-Type: application/json
+X-Wallet-Address: 0x...
+X-Wallet-Timestamp: 1700000000000
+X-Wallet-Nonce: 0x...
+X-Wallet-Signature: 0x...
+{
+  "providerAddress": "0xYourWalletAddress",
+  "name": "ETH 4H Momentum",
+  "description": "Trend-following template submission",
+  "instId": "ETH-USDT",
+  "timeframe": "4H",
+  "templateKey": "sma_crossover",
+  "params": {
+    "fastPeriod": 20,
+    "slowPeriod": 50
+  }
+}
 ```
+
+Supported templates:
+- `sma_crossover`
+- `rsi_reversion`
+- `bollinger_mean_reversion`
+
+Behavior:
+1. bearer token gates entry
+2. wallet-auth proves the submitting owner
+3. platform backtests and scores the strategy
+4. approved submissions become public strategies with gateway-managed pricing
+
+### Read submission result
+
+```http
+GET {STRATEGY_SQUARE_URL}/api/strategy-submissions/{id}
+Authorization: Bearer {STRATEGY_SQUARE_TOKEN}
+X-Wallet-Address: 0x...
+X-Wallet-Timestamp: 1700000000000
+X-Wallet-Nonce: 0x...
+X-Wallet-Signature: 0x...
+```
+
+### Subscribe to an approved strategy
+
+```http
 POST {STRATEGY_SQUARE_URL}/api/strategies/{id}/subscribe
+Authorization: Bearer {STRATEGY_SQUARE_TOKEN}
 Content-Type: application/json
 X-Wallet-Address: 0x...
 X-Wallet-Timestamp: 1700000000000
@@ -68,114 +104,59 @@ X-Wallet-Signature: 0x...
 }
 ```
 
-Behavior:
-1. Request must be signed by the same wallet as `subscriberAddress`
-2. Existing active subscription is reused
-3. Success response returns `{ strategy, subscription, reused }`
+### Poll live signals with x402
 
-### Poll Subscription Signals (x402 payment when pending signals exist)
-
-```
+```http
 GET {STRATEGY_SQUARE_URL}/api/subscriptions/{subscriptionId}/signals
+Authorization: Bearer {STRATEGY_SQUARE_TOKEN}
 ```
 
 Behavior:
-1. If there are no new signals, response is free: `{ pendingCount: 0, signals: [] }`
-2. If new signals exist, first response returns HTTP 402 + `paymentRequirements`
-3. Your x402 wallet signs and retries with `X-Payment`
-4. Success response returns `{ signals, openclawMessages, receipt }`
-5. The x402 payer must match the original `subscriberAddress`
+1. no new live signals -> free response
+2. billable live batch -> HTTP 402 + `paymentRequirements`
+3. wallet signs x402 payload and retries with `X-Payment`
+4. success returns `signals`, `openclawMessages`, and billing receipt
+5. subscription billing is capped within the 30-day window
 
-### Research Market Data (OpenClaw Analysis Flow)
+### Research
 
-#### 1) Discover supported assets (free)
+Free:
 
-```
+```http
 GET {STRATEGY_SQUARE_URL}/api/research/supported-assets
-```
-
-#### 2) Check current price (free)
-
-```
 GET {STRATEGY_SQUARE_URL}/api/research/price?instId=BTC-USDT
 ```
 
-#### 3) Pull candles for strategy analysis (x402 payment required)
+Paid:
 
-```
+```http
 GET {STRATEGY_SQUARE_URL}/api/research/candles?instId=BTC-USDT&bar=1H&limit=120
+Authorization: Bearer {STRATEGY_SQUARE_TOKEN}
 ```
 
-Behavior:
-1. First request returns HTTP 402 + `paymentRequirements`
-2. Your x402 wallet signs and retries with `X-Payment`
-3. Success response returns `{ candles: [...], receipt: {...} }`
+Pricing:
+- `limit <= 120` -> `$0.005`
+- `limit > 120` -> `$0.015`
 
-Use this route to run your own quantitative analysis and strategy research in OpenClaw.
+### Provider earnings
 
-### Publish a Strategy (wallet-signed provider write)
-
-```
-POST {STRATEGY_SQUARE_URL}/api/strategies
-Content-Type: application/json
-X-Wallet-Address: 0x...
-X-Wallet-Timestamp: 1700000000000
-X-Wallet-Nonce: 0x...
-X-Wallet-Signature: 0x...
-{
-  "name": "My Strategy",
-  "description": "Description of the strategy logic",
-  "asset": "ETH/USDC",
-  "timeframe": "4h",
-  "pricePerSignal": 5,
-  "providerAddress": "0xYourWalletAddress"
-}
-```
-
-`pricePerSignal` is in cents (5 = $0.05). Response: `201 { id }`
-
-The signing wallet must match `providerAddress`.
-
-### Push a Signal (wallet-signed provider write)
-
-```
-PUT {STRATEGY_SQUARE_URL}/api/strategies/{id}/signals
-Content-Type: application/json
-X-Wallet-Address: 0x...
-X-Wallet-Timestamp: 1700000000000
-X-Wallet-Nonce: 0x...
-X-Wallet-Signature: 0x...
-{
-  "action": "buy",
-  "token": "ETH",
-  "entry": 3250.50,
-  "stopLoss": 3100.00,
-  "takeProfit": 3500.00,
-  "reasoning": "RSI crossed above 30, bullish divergence on 4h"
-}
-```
-
-### Check Provider Earnings
-
-```
+```http
 GET {STRATEGY_SQUARE_URL}/api/providers/{walletAddress}
+Authorization: Bearer {STRATEGY_SQUARE_TOKEN}
+X-Wallet-Address: 0x...
+X-Wallet-Timestamp: 1700000000000
+X-Wallet-Nonce: 0x...
+X-Wallet-Signature: 0x...
 ```
-
-Response: `{ balance: { totalEarnedCents, pendingCents, totalSignalsSold }, strategies: [...] }`
-
-### Legacy Direct Signal Purchase
-
-```
-GET {STRATEGY_SQUARE_URL}/api/strategies/{id}/signals
-```
-
-This direct-buy route still exists, but OpenClaw integrations should prefer the subscription flow above.
 
 ## Payment Details
 
-- Network: X Layer (zero gas fees)
-- Asset: USDT (USD₮0), contract `0x779ded0c9e1022225f8e0630b35a9b54be713736`
-- Protocol: x402 v1
-- Platform fee: 10% (90% goes to strategy provider)
-- Research candles API price: `$0.001` per request (`/api/research/candles`)
-- The skill itself does not provision wallets or keys
+- network: X Layer
+- asset: USDT (USDt0)
+- settlement: x402
+- signal tiers:
+  - `tier_1`: `$0.03 / signal`, cap `$1.49 / 30d`
+  - `tier_2`: `$0.06 / signal`, cap `$2.99 / 30d`
+  - `tier_3`: `$0.09 / signal`, cap `$5.99 / 30d`
+- revenue split for signals: `90% provider / 10% platform`
+- research candles: `100% platform`

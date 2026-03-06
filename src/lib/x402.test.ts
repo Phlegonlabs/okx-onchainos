@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
-  buildPaymentRequirements,
   buildPaymentRequirementsForAmount,
   buildPaymentRequirementsForMicroUsd,
 } from "./x402";
@@ -30,11 +29,15 @@ describe("x402 payment requirement builders", () => {
     expect(req.payTo).toBe("0x1111111111111111111111111111111111111111");
   });
 
-  it("keeps strategy helper behavior unchanged", () => {
+  it("supports arbitrary resource pricing for gateway routes", () => {
     process.env.PLATFORM_WALLET_ADDRESS = "0x2222222222222222222222222222222222222222";
 
-    const req = buildPaymentRequirements("strategy_1", "Alpha", 25);
-    expect(req.resource).toBe("/api/strategies/strategy_1/signals");
+    const req = buildPaymentRequirementsForAmount({
+      amountCents: 25,
+      resource: "/api/subscriptions/sub_123/signals",
+      description: "subscription batch",
+    });
+    expect(req.resource).toBe("/api/subscriptions/sub_123/signals");
     expect(req.maxAmountRequired).toBe("250000");
     expect(req.payTo).toBe("0x2222222222222222222222222222222222222222");
   });

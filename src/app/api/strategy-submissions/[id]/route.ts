@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/client";
-import { providerBalances, strategies } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { strategyBacktests, strategySubmissions } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { GatewayAuthError, requireGatewayAccess } from "@/lib/gateway-auth";
 import { verifyWalletAuthRequest, WalletAuthError } from "@/lib/wallet-auth";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ address: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     requireGatewayAccess(req.headers);
@@ -18,8 +18,16 @@ export async function GET(
     throw error;
   }
 
-  const { address } = await params;
-  const normalizedAddress = address.toLowerCase();
+  const { id } = await params;
+  const submission = await db
+    .select()
+    .from(strategySubmissions)
+    .where(eq(strategySubmissions.id, id))
+    .get();
+
+  if (!submission) {
+    return NextResponse.json({ error: "Submission not found" }, { status: 404 });
+  }
 
   try {
     await verifyWalletAuthRequest({
@@ -27,7 +35,7 @@ export async function GET(
       method: req.method,
       path: req.nextUrl.pathname,
       rawBody: "",
-      expectedAddress: normalizedAddress,
+      expectedAddress: submission.providerAddress,
     });
   } catch (error) {
     if (error instanceof WalletAuthError) {
@@ -36,26 +44,17 @@ export async function GET(
     throw error;
   }
 
-  const balance = await db
+  const backtest = await db
     .select()
-    .from(providerBalances)
-    .where(eq(providerBalances.providerAddress, normalizedAddress))
+    .from(strategyBacktests)
+    .where(
+      and(
+        eq(strategyBacktests.submissionId, submission.id),
+        eq(strategyBacktests.status, submission.status)
+      )
+    )
+    .orderBy(desc(strategyBacktests.createdAt))
     .get();
 
-  if (!balance) {
-    return NextResponse.json({ error: "Provider not found" }, { status: 404 });
-  }
-
-  const providerStrategies = await db
-    .select({
-      id: strategies.id,
-      name: strategies.name,
-      asset: strategies.asset,
-      winRate: strategies.winRate,
-      totalSignals: strategies.totalSignals,
-    })
-    .from(strategies)
-    .where(eq(strategies.providerAddress, normalizedAddress));
-
-  return NextResponse.json({ balance, strategies: providerStrategies });
+  return NextResponse.json({ submission, backtest });
 }

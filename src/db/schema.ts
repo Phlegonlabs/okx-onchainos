@@ -13,6 +13,14 @@ export const strategies = sqliteTable("strategies", {
   winRate: real("win_rate").default(0),
   avgReturn: real("avg_return").default(0),
   status: text("status").default("active"),
+  listingStatus: text("listing_status").default("approved"),
+  templateKey: text("template_key"),
+  paramsJson: text("params_json"),
+  score: integer("score").default(0),
+  strategyTier: text("strategy_tier").default("tier_1"),
+  periodCapCents: integer("period_cap_cents").default(149),
+  lastScoredAt: text("last_scored_at"),
+  manualDelistedAt: text("manual_delisted_at"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 
@@ -29,6 +37,7 @@ export const signals = sqliteTable("signals", {
   reasoning: text("reasoning"),
   outcome: text("outcome"),
   returnPct: real("return_pct"),
+  source: text("source").default("backtest"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   settledAt: text("settled_at"),
 });
@@ -38,9 +47,12 @@ export const payments = sqliteTable("payments", {
   strategyId: text("strategy_id")
     .notNull()
     .references(() => strategies.id),
+  subscriptionId: text("subscription_id"),
   amountCents: integer("amount_cents").notNull(),
   providerCents: integer("provider_cents").notNull(),
   platformCents: integer("platform_cents").notNull(),
+  billingType: text("billing_type").notNull().default("signal_batch"),
+  unitsBilled: integer("units_billed").notNull().default(1),
   txHash: text("tx_hash"),
   status: text("status").default("settled"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
@@ -87,5 +99,44 @@ export const researchPayments = sqliteTable("research_payments", {
   amountBaseUnits: text("amount_base_units").notNull(),
   txHash: text("tx_hash"),
   status: text("status").notNull().default("settled"),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+});
+
+export const strategySubmissions = sqliteTable("strategy_submissions", {
+  id: text("id").primaryKey(),
+  providerAddress: text("provider_address").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  instId: text("inst_id").notNull(),
+  timeframe: text("timeframe").notNull(),
+  templateKey: text("template_key").notNull(),
+  paramsJson: text("params_json").notNull(),
+  status: text("status").notNull().default("pending"),
+  score: integer("score").default(0),
+  rejectionReason: text("rejection_reason"),
+  strategyId: text("strategy_id"),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+export const strategyBacktests = sqliteTable("strategy_backtests", {
+  id: text("id").primaryKey(),
+  submissionId: text("submission_id")
+    .notNull()
+    .references(() => strategySubmissions.id),
+  strategyId: text("strategy_id"),
+  status: text("status").notNull(),
+  instId: text("inst_id").notNull(),
+  timeframe: text("timeframe").notNull(),
+  templateKey: text("template_key").notNull(),
+  score: integer("score").notNull(),
+  signalCount: integer("signal_count").notNull(),
+  winRate: real("win_rate").notNull(),
+  avgReturn: real("avg_return").notNull(),
+  cumulativeReturnPct: real("cumulative_return_pct").notNull(),
+  maxDrawdownPct: real("max_drawdown_pct").notNull(),
+  windowDays: integer("window_days").notNull(),
+  paramsJson: text("params_json").notNull(),
+  metricsJson: text("metrics_json").notNull(),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });

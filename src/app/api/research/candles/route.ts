@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { db } from "@/db/client";
 import { researchPayments } from "@/db/schema";
+import { GatewayAuthError, requireGatewayAccess } from "@/lib/gateway-auth";
+import { getResearchPricing } from "@/lib/gateway-pricing";
 import {
   fetchCandles,
   getResearchConfig,
@@ -29,6 +31,15 @@ function resolveBar(input: string, allowedBars: Set<string>): string | null {
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    requireGatewayAccess(req.headers);
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    throw error;
+  }
+
   const config = getResearchConfig();
   const instId = normalizeInstId(req.nextUrl.searchParams.get("instId"));
   const barInput = normalizeBar(req.nextUrl.searchParams.get("bar"));
@@ -82,9 +93,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const pricing = getResearchPricing(limit);
   const resource = `/api/research/candles?instId=${encodeURIComponent(instId)}&bar=${encodeURIComponent(bar)}&limit=${limit}`;
   const paymentReqs = buildPaymentRequirementsForMicroUsd({
-    amountMicroUsd: config.candlesPriceMicroUsd,
+    amountMicroUsd: pricing.amountMicroUsd,
     resource,
     description: `Research candles for ${instId} (${bar}, ${limit})`,
   });
@@ -98,7 +110,8 @@ export async function GET(req: NextRequest) {
           instId,
           bar,
           limit,
-          priceMicroUsd: config.candlesPriceMicroUsd,
+          priceMicroUsd: pricing.amountMicroUsd,
+          pricingTier: pricing.tier,
         },
       },
       {
@@ -156,7 +169,7 @@ export async function GET(req: NextRequest) {
     instId,
     bar,
     limit,
-    amountMicroUsd: config.candlesPriceMicroUsd,
+    amountMicroUsd: pricing.amountMicroUsd,
     amountBaseUnits: paymentReqs.maxAmountRequired,
     txHash: settleResult.txHash,
     status: "settled",
@@ -166,8 +179,9 @@ export async function GET(req: NextRequest) {
     ...candlesData,
     receipt: {
       resource,
-      paidMicroUsd: config.candlesPriceMicroUsd,
+      paidMicroUsd: pricing.amountMicroUsd,
       paidBaseUnits: paymentReqs.maxAmountRequired,
+      pricingTier: pricing.tier,
       payerAddress,
       txHash: settleResult.txHash,
     },

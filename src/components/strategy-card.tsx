@@ -7,6 +7,8 @@ interface Strategy {
   asset: string;
   timeframe: string;
   pricePerSignal: number;
+  strategyTier?: string | null;
+  periodCapCents?: number | null;
   winRate: number;
   avgReturn: number;
   totalSignals: number;
@@ -39,6 +41,11 @@ export function StrategyCard({ strategy }: { strategy: Strategy }) {
               <span className="mono-font text-xs text-zinc-500">
                 {strategy.timeframe}
               </span>
+              {strategy.strategyTier ? (
+                <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-0.5 text-xs text-zinc-400">
+                  {strategy.strategyTier.replace("_", " ").toUpperCase()}
+                </span>
+              ) : null}
             </div>
           </div>
           <span className="mono-font rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200">
@@ -48,6 +55,10 @@ export function StrategyCard({ strategy }: { strategy: Strategy }) {
 
         <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-zinc-400">
           {strategy.description}
+        </p>
+
+        <p className="mt-3 text-xs text-zinc-500">
+          30-day cap: ${((strategy.periodCapCents ?? 0) / 100).toFixed(2)}
         </p>
 
         <div className="mt-auto pt-5">

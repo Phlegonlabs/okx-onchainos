@@ -5,6 +5,26 @@ const client = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
+type ColumnSpec = {
+  table: string;
+  column: string;
+  sql: string;
+};
+
+async function getExistingColumns(table: string) {
+  const result = await client.execute(`PRAGMA table_info(${table})`);
+  return new Set(
+    (result.rows as Array<Record<string, unknown>>).map((row) => String(row.name))
+  );
+}
+
+async function ensureColumn(spec: ColumnSpec) {
+  const columns = await getExistingColumns(spec.table);
+  if (columns.has(spec.column)) return false;
+  await client.execute(spec.sql);
+  return true;
+}
+
 async function main() {
   console.log("Ensuring schema (no reset)...");
 
@@ -91,9 +111,115 @@ async function main() {
       status TEXT NOT NULL DEFAULT 'settled',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS strategy_submissions (
+      id TEXT PRIMARY KEY,
+      provider_address TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      inst_id TEXT NOT NULL,
+      timeframe TEXT NOT NULL,
+      template_key TEXT NOT NULL,
+      params_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      score INTEGER DEFAULT 0,
+      rejection_reason TEXT,
+      strategy_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS strategy_backtests (
+      id TEXT PRIMARY KEY,
+      submission_id TEXT NOT NULL REFERENCES strategy_submissions(id),
+      strategy_id TEXT,
+      status TEXT NOT NULL,
+      inst_id TEXT NOT NULL,
+      timeframe TEXT NOT NULL,
+      template_key TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      signal_count INTEGER NOT NULL,
+      win_rate REAL NOT NULL,
+      avg_return REAL NOT NULL,
+      cumulative_return_pct REAL NOT NULL,
+      max_drawdown_pct REAL NOT NULL,
+      window_days INTEGER NOT NULL,
+      params_json TEXT NOT NULL,
+      metrics_json TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
-  console.log("Schema ensured. No rows were deleted.");
+  const additions: ColumnSpec[] = [
+    {
+      table: "strategies",
+      column: "listing_status",
+      sql: "ALTER TABLE strategies ADD COLUMN listing_status TEXT DEFAULT 'approved'",
+    },
+    {
+      table: "strategies",
+      column: "template_key",
+      sql: "ALTER TABLE strategies ADD COLUMN template_key TEXT",
+    },
+    {
+      table: "strategies",
+      column: "params_json",
+      sql: "ALTER TABLE strategies ADD COLUMN params_json TEXT",
+    },
+    {
+      table: "strategies",
+      column: "score",
+      sql: "ALTER TABLE strategies ADD COLUMN score INTEGER DEFAULT 0",
+    },
+    {
+      table: "strategies",
+      column: "strategy_tier",
+      sql: "ALTER TABLE strategies ADD COLUMN strategy_tier TEXT DEFAULT 'tier_1'",
+    },
+    {
+      table: "strategies",
+      column: "period_cap_cents",
+      sql: "ALTER TABLE strategies ADD COLUMN period_cap_cents INTEGER DEFAULT 149",
+    },
+    {
+      table: "strategies",
+      column: "last_scored_at",
+      sql: "ALTER TABLE strategies ADD COLUMN last_scored_at TEXT",
+    },
+    {
+      table: "strategies",
+      column: "manual_delisted_at",
+      sql: "ALTER TABLE strategies ADD COLUMN manual_delisted_at TEXT",
+    },
+    {
+      table: "signals",
+      column: "source",
+      sql: "ALTER TABLE signals ADD COLUMN source TEXT DEFAULT 'backtest'",
+    },
+    {
+      table: "payments",
+      column: "subscription_id",
+      sql: "ALTER TABLE payments ADD COLUMN subscription_id TEXT",
+    },
+    {
+      table: "payments",
+      column: "billing_type",
+      sql: "ALTER TABLE payments ADD COLUMN billing_type TEXT NOT NULL DEFAULT 'signal_batch'",
+    },
+    {
+      table: "payments",
+      column: "units_billed",
+      sql: "ALTER TABLE payments ADD COLUMN units_billed INTEGER NOT NULL DEFAULT 1",
+    },
+  ];
+
+  let changed = 0;
+  for (const addition of additions) {
+    const didChange = await ensureColumn(addition);
+    if (didChange) changed += 1;
+  }
+
+  console.log(`Schema ensured. Added ${changed} missing columns. No rows were deleted.`);
 }
 
 main().catch((error) => {

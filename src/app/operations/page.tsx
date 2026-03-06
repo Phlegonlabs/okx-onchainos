@@ -19,21 +19,48 @@ type FlowMap = {
 
 const flowMaps: FlowMap[] = [
   {
-    id: "subscription",
-    title: "Flow 01 - Subscribe Strategy",
+    id: "submission",
+    title: "Flow 01 - Submit Strategy Template",
     subtitle:
-      "Create or reuse a 30-day subscription for one strategy and keep status observable.",
+      "Private skill users submit template + params, then the platform backtests and lists only approved strategies.",
     steps: [
       {
-        title: "Pick a strategy",
-        detail: "List active strategies and choose one target strategy id.",
+        title: "Submit candidate",
+        detail: "Send providerAddress, templateKey, timeframe, instId, and params through the private skill gateway.",
+        method: "POST",
+        path: "/api/strategy-submissions",
+      },
+      {
+        title: "Run unified backtest",
+        detail:
+          "Platform fetches candles, scores the strategy, and assigns tier, unit price, and period cap.",
+      },
+      {
+        title: "Read submission result",
+        detail:
+          "Owner reads back the approval or rejection state with wallet auth plus bearer access.",
+        method: "GET",
+        path: "/api/strategy-submissions/:id",
+      },
+    ],
+  },
+  {
+    id: "subscription",
+    title: "Flow 02 - Subscribe Approved Strategy",
+    subtitle:
+      "Consumers subscribe to an approved strategy once, then only pay when fresh live signals exist.",
+    steps: [
+      {
+        title: "Pick a listed strategy",
+        detail:
+          "Public feed shows only approved strategies with gateway-managed pricing tiers.",
         method: "GET",
         path: "/api/strategies",
       },
       {
         title: "Create or reuse subscription",
         detail:
-          "Submit subscriberAddress (+ optional planDays) with wallet-auth headers. Existing active plan is reused.",
+          "Submit subscriberAddress (+ optional planDays) with wallet-auth headers through the private skill token.",
         method: "POST",
         path: "/api/strategies/:id/subscribe",
         note: "Signing wallet must equal subscriberAddress",
@@ -41,38 +68,9 @@ const flowMaps: FlowMap[] = [
       {
         title: "Read subscription state",
         detail:
-          "Query by subscriberAddress to get current status, expiry, and billing anchor.",
+          "Query by subscriberAddress to inspect expiry, tier, and current 30-day cap.",
         method: "GET",
         path: "/api/strategies/:id/subscribe?subscriberAddress=0x...",
-      },
-    ],
-  },
-  {
-    id: "provider",
-    title: "Flow 02 - Provider Publish",
-    subtitle:
-      "Provider creates strategy, pushes new signals, and checks earnings accumulation.",
-    steps: [
-      {
-        title: "Create strategy",
-        detail:
-          "Publish one strategy with wallet-auth headers. providerAddress must equal the signing wallet.",
-        method: "POST",
-        path: "/api/strategies",
-      },
-      {
-        title: "Push a signal",
-        detail:
-          "Append one BUY/SELL signal with the same provider wallet. This becomes billable for subscribers.",
-        method: "PUT",
-        path: "/api/strategies/:id/signals",
-      },
-      {
-        title: "Track provider balance",
-        detail:
-          "Inspect earned cents, pending cents, and total signals sold for payout logic.",
-        method: "GET",
-        path: "/api/providers/:address",
       },
     ],
   },
@@ -80,7 +78,7 @@ const flowMaps: FlowMap[] = [
     id: "subscriber-signals",
     title: "Flow 03 - Subscriber Consume (x402)",
     subtitle:
-      "Polling is free when no new signals exist. x402 is required only when pending signals exist.",
+      "Polling is free when no new live signals exist. x402 is required only when a billable batch is pending.",
     steps: [
       {
         title: "Poll pending signals",
@@ -93,8 +91,8 @@ const flowMaps: FlowMap[] = [
       {
         title: "Handle HTTP 402",
         detail:
-          "If pendingCount > 0, response includes paymentRequirements and request pricing.",
-        note: "amountCents = pricePerSignal * pendingSignalCount",
+          "If pendingCount > 0, response includes paymentRequirements and capped request pricing.",
+        note: "chargedCents = min(pricePerSignal * pendingSignalCount, remainingPeriodCap)",
       },
       {
         title: "Retry with X-Payment",
@@ -112,7 +110,7 @@ const flowMaps: FlowMap[] = [
     id: "research",
     title: "Flow 04 - Research APIs (x402)",
     subtitle:
-      "Use free metadata/spot routes first, then pay per candles request when historical data is needed.",
+      "Use free metadata/spot routes first, then pay a small or large candles tier when historical data is needed.",
     steps: [
       {
         title: "Load supported assets (free)",
@@ -129,7 +127,7 @@ const flowMaps: FlowMap[] = [
       {
         title: "Request candles -> HTTP 402",
         detail:
-          "Historical candles endpoint returns payment requirements before data access.",
+          "Historical candles endpoint returns payment requirements before data access. Price scales by requested limit.",
         method: "GET",
         path: "/api/research/candles?instId=BTC-USDT&bar=1H&limit=120",
       },
@@ -150,12 +148,12 @@ export default function OperationsPage() {
           Ops Handbook
         </p>
         <h1 className="display-font mt-2 text-3xl font-semibold text-zinc-50 sm:text-4xl">
-          Subscription + x402 Per-Signal Billing
+          Private Skill Gateway + x402 Value Billing
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
-          This page documents the current production flow: 30-day subscription,
-          pay only when new signals exist, and settle through x402 on X Layer.
-          Pricing is per single signal message.
+          This page documents the current production flow: private skill access,
+          template submission, gateway-managed pricing, capped subscription
+          billing, and x402 settlement on X Layer.
         </p>
       </section>
 
@@ -164,26 +162,24 @@ export default function OperationsPage() {
           Payment Model
         </h2>
         <div className="mt-4 space-y-2 text-sm text-zinc-300">
-          <p>1. Create subscription once for a strategy (default 30 days) with wallet-auth headers.</p>
+          <p>1. Public listing is free to browse; only approved strategies appear on the gateway feed.</p>
           <p>
-            2. Poll subscription signals. If no new signals, response is free.
+            2. Strategy submission is free, but only private skill users can submit template + params.
           </p>
           <p>
-            3. If new signals exist, API returns HTTP 402 + payment requirements.
+            3. Live signals and candles are the two paid x402 surfaces.
           </p>
           <p>
-            4. After payment, all pending new signals are returned in one batch.
+            4. Subscription billing is still per signal, but each 30-day period has a price cap.
           </p>
           <p>
-            5. Billing unit is one signal message. If 3 pending signals exist, you
-            pay 3x `pricePerSignal`.
+            5. After a subscription hits its cap, later signal batches in the same period are free.
           </p>
           <p>
-            6. Every response with signals also includes `openclawMessages` so
-            OpenClaw can immediately consume BUY/SELL notifications.
+            6. Research candles use tiered prices: smaller requests cost less than larger windows.
           </p>
           <p>
-            7. Provider writes and subscription creation are signed by the agent wallet. The skill itself does not install that wallet.
+            7. Provider balances and premium routes are no longer public browser surfaces; they sit behind the private skill gateway.
           </p>
         </div>
       </section>
@@ -213,8 +209,8 @@ export default function OperationsPage() {
         <div className="mt-4 grid gap-3 text-sm">
           <ApiItem
             method="POST"
-            path="/api/strategies"
-            desc="Create strategy. Requires wallet-auth signed request from providerAddress."
+            path="/api/strategy-submissions"
+            desc="Submit a candidate strategy template. Requires bearer access plus wallet-auth signed request from providerAddress."
           />
           <ApiItem
             method="POST"
@@ -227,47 +223,43 @@ export default function OperationsPage() {
             desc="Read active subscription status for a wallet."
           />
           <ApiItem
-            method="PUT"
-            path="/api/strategies/:id/signals"
-            desc="Push a new signal. Requires wallet-auth signed request from the strategy owner."
+            method="GET"
+            path="/api/providers/:address"
+            desc="Read provider earnings. Requires bearer access plus owner wallet-auth."
           />
           <ApiItem
             method="GET"
             path="/api/subscriptions/:subscriptionId/signals"
-            desc="Fetch pending signals; returns 402 only when payment is needed. x402 payer must match the subscription wallet."
+            desc="Fetch pending live signals; returns 402 only when payment is needed. The 30-day billing cap is enforced here."
           />
           <ApiItem
             method="GET"
             path="/api/research/candles?instId=BTC-USDT&bar=1H&limit=120"
-            desc="Research candles endpoint (x402). Fixed cost: $0.001 per request."
+            desc="Research candles endpoint (x402). Pricing scales by limit tier."
           />
         </div>
       </section>
 
       <section className="surface-card rounded-3xl p-5 sm:p-6">
         <h2 className="display-font text-2xl font-semibold text-zinc-50">
-          Per-Signal Pricing Guide
+          Pricing Guide
         </h2>
         <div className="mt-4 space-y-3 text-sm text-zinc-300">
           <p>
-            `amountCents = pricePerSignalCents * pendingSignalCount`
+            `chargedCents = min(pricePerSignalCents * pendingSignalCount, remainingPeriodCapCents)`
           </p>
           <p>
-            `maxAmountRequired = amountCents * 10000` (USDT smallest units on
+            `maxAmountRequired = chargedCents * 10000` (USDT smallest units on
             X Layer).
           </p>
           <p>
-            Example: if `pricePerSignalCents = 6` and `pendingSignalCount = 2`,
-            then `amountCents = 12` and `maxAmountRequired = 120000`.
+            Current strategy tiers: `tier_1 = $0.03 / $1.49 cap`, `tier_2 = $0.06 / $2.99 cap`, `tier_3 = $0.09 / $5.99 cap`.
           </p>
           <p>
-            Current recommended active strategy range: `3-9` cents per signal
-            (`$0.03-$0.09`) to keep entry friction low.
+            Research candles pricing: up to 120 candles costs $0.005; above 120 candles costs $0.015.
           </p>
           <p className="text-zinc-400">
-            Protocol note: x402 itself does not enforce one fixed global
-            minimum amount in this app. Your business minimum is defined by
-            strategy pricing.
+            Protocol note: x402 remains the settlement layer; gateway bearer access controls who can use the managed capability bundle.
           </p>
         </div>
       </section>
@@ -281,7 +273,7 @@ export default function OperationsPage() {
             href="/"
             className="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200 transition-colors hover:bg-zinc-800"
           >
-            Back to Marketplace
+            Back to Gateway
           </Link>
           <a
             href="https://github.com/Phlegonlabs/okx-onchainos"
